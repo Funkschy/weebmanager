@@ -1,0 +1,13 @@
+{:source-paths
+ ["src/main"]
+
+ :dependencies
+ [[reagent "1.1.1"]
+  [cider/cider-nrepl "0.27.3"]]
+
+ :builds
+ {:weebmanager
+  {:target :react-native
+   :init-fn weebmanager.core/init
+   :output-dir "app"
+   :js-options {:js-package-dirs ["node_modules"]}}}}
