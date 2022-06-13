@@ -55,8 +55,21 @@
                        (pluralize "episode" (-> anime .-item .-behind))
                        " behind")}]))
 
-(defn main-screen [animes-atom]
-  (let [animes @animes-atom]
+(def state
+  (r/atom {:username "funkschy"
+           :animes []
+           :loading? false}))
+
+(defn fetch-anime-data []
+  (go
+    (swap! state assoc :loading? true)
+    (let [username (:username @state)
+          animes   (<! (a/fetch-behind-schedule username))]
+      (swap! state assoc :animes animes)
+      (swap! state assoc :loading? false))))
+
+(defn main-screen []
+  (let [{:keys [animes loading?]} @state]
     (fn []
       (r/as-element
        [:> rn/View
@@ -67,6 +80,8 @@
          {:style {:margin 4
                   :margin-bottom 40
                   :align-self "stretch"}
+          :refreshing loading?
+          :on-refresh fetch-anime-data
           :data (map (fn [{:keys [title main_picture behind]}]
                        ;; TODO: add option to switch between en and jp
                        {:id title
@@ -85,9 +100,8 @@
       [:> rn/Text "Settings"]])))
 
 (defn app-root []
-  (let [animes (r/atom [])
-        stack  (createNativeStackNavigator)]
-    (go (reset! animes (<! (a/fetch-behind-schedule "funkschy"))))
+  (let [stack  (createNativeStackNavigator)]
+    (fetch-anime-data)
     (fn []
       [:> p/Provider
        [:> n/NavigationContainer
@@ -96,7 +110,7 @@
           :screen-options {:header (header-bar)}}
          [:> (. stack -Screen)
           {:name "Weebmanager"
-           :component (main-screen animes)
+           :component (main-screen)
            :options {:animation "fade_from_bottom"}}]
          [:> (. stack -Screen)
           {:name "Settings"
