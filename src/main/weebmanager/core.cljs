@@ -17,11 +17,14 @@
   (r/atom {:dark? true
            :amoled? false}))
 
+;; this will be set to "funkschy" in debug builds by the shadow-cljs config
+(goog-define default-username "")
+
 (def basic-settings
   (r/atom {:title-language :romaji}))
 
 (def mal-settings
-  (r/atom {:username "funkschy"}))
+  (r/atom {:username default-username}))
 
 (def state
   (r/atom {:animes []

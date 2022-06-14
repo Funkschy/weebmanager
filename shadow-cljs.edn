@@ -9,5 +9,6 @@
  {:weebmanager
   {:target :react-native
    :init-fn weebmanager.core/init
+   :dev {:closure-defines {weebmanager.core/default-username "funkschy"}}
    :output-dir "app"
    :js-options {:js-package-dirs ["node_modules"]}}}}
