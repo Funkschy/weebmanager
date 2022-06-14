@@ -62,6 +62,6 @@ buck-out/
 
 # Clojure stuff
 .shadow-cljs/
-app/
+/app/
 .clj-kondo/
 .lsp/
