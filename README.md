@@ -8,6 +8,6 @@ Just download the latest apk file from the releases section
 
 ## Screenshots
 
-[Main overview screen](main-view-dark-romaji.png)
-[Main overview screen](main-view-light-native.png)
-[settings screen](settings-view.png)
+![Main overview screen](main-view-dark-romaji.png)
+![Main overview screen](main-view-light-native.png)
+![settings screen](settings-view.png)
