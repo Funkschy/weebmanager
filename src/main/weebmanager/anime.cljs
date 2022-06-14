@@ -43,6 +43,11 @@
        Page(page: $page, perPage: 100) {
            media(type: $type, season: $season, startDate_like: $year, sort: $sort) {
                id:idMal
+               title {
+                   english
+                   romaji
+                   native
+               }
                episodes
                nextAiringEpisode {
                    airingAt

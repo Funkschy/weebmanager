@@ -8,7 +8,22 @@
    ["react-native-vector-icons/MaterialIcons" :as m]
    [cljs.core.async :refer [<!]]
    [reagent.core :as r]
-   [weebmanager.anime :as a]))
+   [weebmanager.anime :as a]
+   [clojure.string :as str]))
+
+;; this can't be included in basic settings, because if it was, the entire settings page would
+;; refresh everytime the user changes some basic setting
+(def dark? (r/atom true))
+
+(def basic-settings
+  (r/atom {:title-language :romaji}))
+
+(def mal-settings
+  (r/atom {:username "funkschy"}))
+
+(def state
+  (r/atom {:animes []
+           :loading? false}))
 
 (defn pluralize [noun count]
   (str count " " noun (when (> count 1) "s")))
@@ -55,55 +70,127 @@
                        (pluralize "episode" (-> anime .-item .-behind))
                        " behind")}]))
 
-(def state
-  (r/atom {:username "funkschy"
-           :animes []
-           :loading? false}))
-
 (defn fetch-anime-data []
   (go
     (swap! state assoc :loading? true)
-    (let [username (:username @state)
+    (let [{:keys [username]} @mal-settings
           animes   (<! (a/fetch-behind-schedule username))]
       (swap! state assoc :animes animes)
       (swap! state assoc :loading? false))))
 
 (defn main-screen []
-  (let [{:keys [animes loading?]} @state]
+  (let [{:keys [animes loading?]} @state
+        {:keys [title-language]}  @basic-settings]
+    (p/withTheme
+     (fn [^js props]
+       (r/as-element
+        [:> rn/View
+         {:style {:flex 1
+                  :background-color (-> props .-theme .-colors .-background)
+                  :padding-top 0}}
+
+         [:> rn/FlatList
+          {:style {:margin 4
+                   :margin-bottom 40
+                   :align-self :stretch}
+           :refreshing loading?
+           :on-refresh fetch-anime-data
+           :data (map (fn [{:keys [title main_picture behind]}]
+                        {:id (get title title-language)
+                         :name (get title title-language)
+                         :behind behind
+                         :image (get main_picture :medium "")})
+                      animes)
+           :render-item anime-list-entry}]])))))
+
+(defn settings-entry [component & {:keys [title description style]}]
+  [:> (. p/List -Item)
+   {:title title
+    :description description
+    :right (fn [] (r/as-element component))
+    :style style}])
+
+(defn username-input []
+  (let [{:keys [username]} @mal-settings]
+    (fn []
+      [:> rn/View
+       {:style {:align-items :stretch
+                :margin 15}}
+       [:> p/TextInput
+        {:label "Username"
+         :default-value username
+         :on-change-text #(swap! mal-settings assoc :username %)
+         :placeholder "Your myanimelist.net username"}]])))
+
+(defn radio-button [key settings-atom settings-path]
+  (let [status   (if (= key (get-in @settings-atom settings-path)) "checked" "unchecked")
+        on-press #(swap! settings-atom assoc-in settings-path key)]
     (fn []
       (r/as-element
-       [:> rn/View
-        {:style {:flex 1
-                 :padding-top 0}}
+       [:> p/RadioButton
+        {:value (str/capitalize (name key)) :status status :on-press on-press}]))))
 
-        [:> rn/FlatList
-         {:style {:margin 4
-                  :margin-bottom 40
-                  :align-self "stretch"}
-          :refreshing loading?
-          :on-refresh fetch-anime-data
-          :data (map (fn [{:keys [title main_picture behind]}]
-                       ;; TODO: add option to switch between en and jp
-                       {:id title
-                        :name title
-                        :behind behind
-                        :image (get main_picture :medium "")})
-                     animes)
-          :render-item anime-list-entry}]]))))
+(defn title-language-setting []
+  (fn []
+    [:> (. p/List -Accordion)
+     {:title "Title Language"}
+
+     [:> (. p/List -Item)
+      {:title "Native"
+       :right (radio-button :native basic-settings [:title-language])}]
+     [:> (. p/List -Item)
+      {:title "English"
+       :right (radio-button :english basic-settings [:title-language])}]
+     [:> (. p/List -Item)
+      {:title "Romaji"
+       :right (radio-button :romaji basic-settings [:title-language])}]]))
 
 (defn settings-screen []
-  (fn []
-    (r/as-element
-     [:> rn/View {:style {:flex 1
-                          :padding-top 0}}
+  (let [is-dark? @dark?]
+    (p/withTheme
+     (fn [^js props]
+       (r/as-element
+        [:> rn/View
+         {:style {:flex 1
+                  :background-color (-> props .-theme .-colors .-background)
+                  :padding-top 0}}
 
-      [:> rn/Text "Settings"]])))
+         [:> (. p/List -Section)
+          [:> (. p/List -Subheader) "Basics"]
+          (settings-entry
+           [:> p/Switch
+            {:value is-dark?
+             :on-value-change #(swap! dark? not)}]
+           :title "Dark theme"
+           :description "Change this if you hate your eyes")
+          [title-language-setting]]
+
+         [:> p/Divider]
+
+         [:> (. p/List -Section)
+          [:> (. p/List -Subheader) "MyAnimeList"]
+          [username-input]]])))))
+
+(def colors
+  {})
+
+(def theme-options
+  {"roundness" 2
+   "mode" "adaptive"})
+
+(defn theme []
+  (let [dark? @dark?
+        base-theme (js->clj (if dark? p/DarkTheme p/DefaultTheme))]
+    (merge base-theme
+           theme-options
+           {:colors (merge (get base-theme "colors") colors)})))
 
 (defn app-root []
   (let [stack  (createNativeStackNavigator)]
     (fetch-anime-data)
     (fn []
       [:> p/Provider
+       {:theme (theme)}
        [:> n/NavigationContainer
         [:> (. stack -Navigator)
          {:initial-route-name "Weebmanager"
@@ -122,5 +209,5 @@
                       "weebmanager"
                       #(r/reactify-component app-root)))
 
-(defn init []
+(defn ^:export init []
   (start))
