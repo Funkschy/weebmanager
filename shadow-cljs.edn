@@ -3,7 +3,6 @@
 
  :dependencies
  [[reagent "1.1.1"]
-  [cider/cider-nrepl "0.27.3"]
   [cljs-http "0.1.46"]]
 
  :builds
