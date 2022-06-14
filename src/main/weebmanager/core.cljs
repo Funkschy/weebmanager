@@ -78,6 +78,11 @@
       (swap! state assoc :animes animes)
       (swap! state assoc :loading? false))))
 
+(defn get-title [title-options preferred-title-language]
+  (get title-options
+       preferred-title-language
+       (first (vals title-options))))
+
 (defn main-screen []
   (let [{:keys [animes loading?]} @state
         {:keys [title-language]}  @basic-settings]
@@ -96,10 +101,11 @@
            :refreshing loading?
            :on-refresh fetch-anime-data
            :data (map (fn [{:keys [title main_picture behind]}]
-                        {:id (get title title-language)
-                         :name (get title title-language)
-                         :behind behind
-                         :image (get main_picture :medium "")})
+                        (let [title (get-title title title-language)]
+                          {:id title
+                           :name title
+                           :behind behind
+                           :image (get main_picture :medium "")}))
                       animes)
            :render-item anime-list-entry}]])))))
 
