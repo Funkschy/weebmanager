@@ -13,7 +13,9 @@
 
 ;; this can't be included in basic settings, because if it was, the entire settings page would
 ;; refresh everytime the user changes some basic setting
-(def dark? (r/atom true))
+(def theme-settings
+  (r/atom {:dark? true
+           :amoled? false}))
 
 (def basic-settings
   (r/atom {:title-language :romaji}))
@@ -152,7 +154,7 @@
        :right (radio-button :romaji basic-settings [:title-language])}]]))
 
 (defn settings-screen []
-  (let [is-dark? @dark?]
+  (let [{:keys [dark? amoled?]} @theme-settings]
     (p/withTheme
      (fn [^js props]
        (r/as-element
@@ -165,10 +167,18 @@
           [:> (. p/List -Subheader) "Basics"]
           (settings-entry
            [:> p/Switch
-            {:value is-dark?
-             :on-value-change #(swap! dark? not)}]
+            {:value dark?
+             :on-value-change #(swap! theme-settings update :dark? not)}]
            :title "Dark theme"
            :description "Change this if you hate your eyes")
+
+          (settings-entry
+           [:> p/Switch
+            {:value amoled?
+             :on-value-change #(swap! theme-settings update :amoled? not)}]
+           :title "AMOLED"
+           :description "If you love your eyes and your battery")
+
           [title-language-setting]]
 
          [:> p/Divider]
@@ -178,18 +188,23 @@
           [username-input]]])))))
 
 (def colors
-  {})
+  {"accent" "#6200ee"})
 
 (def theme-options
   {"roundness" 2
    "mode" "adaptive"})
 
 (defn theme []
-  (let [dark? @dark?
+  (let [{:keys [dark? amoled?]} @theme-settings
         base-theme (js->clj (if dark? p/DarkTheme p/DefaultTheme))]
     (merge base-theme
            theme-options
-           {:colors (merge (get base-theme "colors") colors)})))
+           {:colors (merge (get base-theme "colors")
+                           colors
+                           (when dark?
+                             {"accent" "#bb86fc"})
+                           (when (and dark? amoled?)
+                             {"background" "#000000"}))})))
 
 (defn app-root []
   (let [stack  (createNativeStackNavigator)]
