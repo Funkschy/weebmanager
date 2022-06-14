@@ -1,15 +1,21 @@
 (ns weebmanager.core
   (:require-macros [cljs.core.async.macros :refer [go]])
   (:require
-   ["react-native" :as rn :refer [AppRegistry]]
-   ["react-native-paper" :as p]
+   ["@react-native-async-storage/async-storage" :as storage]
    ["@react-navigation/native" :as n]
    ["@react-navigation/native-stack" :refer [createNativeStackNavigator]]
-   ["react-native-vector-icons/MaterialIcons" :as m]
    [cljs.core.async :refer [<!]]
+   [cljs.core.async.interop :refer-macros [<p!]]
+   [clojure.string :as str]
+   ["react-native" :as rn :refer [AppRegistry]]
+   ["react-native-paper" :as p]
+   ["react-native-vector-icons/MaterialIcons" :as m]
    [reagent.core :as r]
-   [weebmanager.anime :as a]
-   [clojure.string :as str]))
+   [weebmanager.anime :as a]))
+
+;; sometimes imports from js/typescript libs are a bit weird
+(def MaterialIcon (. m -default))
+(def AsyncStorage (. storage -default))
 
 ;; this can't be included in basic settings, because if it was, the entire settings page would
 ;; refresh everytime the user changes some basic setting
@@ -30,10 +36,57 @@
   (r/atom {:animes []
            :loading? false}))
 
+(defn boolean-default-true [value]
+  (not= "false" value))
+
+(defn boolean-default-false [value]
+  (= "true" value))
+
+(defn simple-default [default]
+  (fn [value]
+    (or value default)))
+
+(defn setting [atom path save-key save-map load-map]
+  {:atom atom :path path :save-key save-key :save-map save-map :load-map load-map})
+
+(def settings
+  [(setting mal-settings [:username] "@username" identity (simple-default default-username))
+   (setting theme-settings [:dark?] "@dark" str boolean-default-true)
+   (setting theme-settings [:amoled?] "@amoled" str boolean-default-false)
+   (setting basic-settings [:title-language] "@title-language" name (comp (simple-default :romaji) keyword))])
+
+(defn load-setting [{:keys [atom path save-key load-map]}]
+  (->> save-key
+       (.getItem AsyncStorage)
+       <p!
+       load-map
+       (swap! atom assoc-in path)
+       go))
+
+(defn save-setting [{:keys [atom path save-key save-map]}]
+  (->> path
+       (get-in @atom)
+       save-map
+       (.setItem AsyncStorage save-key)))
+
+(defn load-data []
+  (go
+    (try
+      (doseq [setting settings]
+        (load-setting setting))
+      (catch js/Error e
+        (prn e)))))
+
+(defn save-data []
+  (go
+    (try
+      (doseq [setting settings]
+        (save-setting setting))
+      (catch js/Error e
+        (prn e)))))
+
 (defn pluralize [noun count]
   (str count " " noun (when (> count 1) "s")))
-
-(def MaterialIcon (. m -default))
 
 (defn back-icon []
   (fn []
@@ -51,7 +104,10 @@
         (when (.-back navigation)
           [:> (. p/Appbar -Action)
            {:icon (back-icon)
-            :on-press #(-> navigation .-navigation .pop)}])
+            :on-press
+            #(do (-> navigation .-navigation .pop)
+                 (when (= route-name "Settings")
+                   (save-data)))}])
 
         [:> (. p/Appbar -Content)
          {:title route-name}]
@@ -211,7 +267,8 @@
 
 (defn app-root []
   (let [stack  (createNativeStackNavigator)]
-    (fetch-anime-data)
+    (go (<! (load-data))
+        (<! (fetch-anime-data)))
     (fn []
       [:> p/Provider
        {:theme (theme)}
