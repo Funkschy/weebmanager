@@ -73,7 +73,7 @@
   (go
     (try
       (doseq [setting settings]
-        (load-setting setting))
+        (<! (load-setting setting)))
       (catch js/Error e
         (prn e)))))
 
