@@ -2,8 +2,8 @@
   (:require-macros [cljs.core.async.macros :refer [go]])
   (:require
    ["@react-native-async-storage/async-storage" :as storage]
+   ["@react-navigation/drawer" :as d :refer [createDrawerNavigator]]
    ["@react-navigation/native" :as n]
-   ["@react-navigation/native-stack" :refer [createNativeStackNavigator]]
    [cljs.core.async :refer [<!]]
    [cljs.core.async.interop :refer-macros [<p!]]
    [clojure.string :as str]
@@ -88,26 +88,28 @@
 (defn pluralize [noun count]
   (str count " " noun (when (> count 1) "s")))
 
-(defn back-icon []
+(defn appbar-icon [name]
   (fn []
     (r/as-element
      [:> MaterialIcon
-      {:name "arrow-back"
+      {:name name
        :color "white"
        :size 24}])))
 
 (defn header-bar []
-  (fn [^js navigation]
-    (let [route-name  (-> navigation .-route .-name)]
+  (fn [^js props]
+    (let [route-name  (-> props .-route .-name)]
       (r/as-element
        [:> (. p/Appbar -Header)
-        (when (.-back navigation)
-          [:> (. p/Appbar -Action)
-           {:icon (back-icon)
-            :on-press
-            #(do (-> navigation .-navigation .pop)
-                 (when (= route-name "Settings")
-                   (save-data)))}])
+        [:> (. p/Appbar -Action)
+         {:icon (appbar-icon "menu")
+          :on-press
+          #(do (-> props .-navigation .openDrawer)
+                 ;; TODO: this is a bad solution, because it doesn't work when the user swipes left
+                 ;;  from the right side of the screen, which is more common than hitting the back
+                 ;;  button. Maybe add-watch on the atom instead?
+               (when (= route-name "Settings")
+                 (save-data)))}]
 
         [:> (. p/Appbar -Content)
          {:title route-name}]
@@ -115,7 +117,40 @@
         (when-not (= route-name "Settings")
           [:> (. p/Appbar -Action)
            {:icon "dots-vertical"
-            :on-press #(-> navigation .-navigation (.push "Settings"))}])]))))
+            :on-press #(-> props .-navigation (.navigate "Settings"))}])]))))
+
+(defn drawer-item [props name]
+  (let [^js navigation (. props -navigation)
+        ^js nav-state  (. navigation getState)
+        current-route  (aget (. nav-state -routes) (. nav-state -index))]
+    [:> (. p/Drawer -Item)
+     {:label name
+      :active (= (. current-route -name) name)
+      :on-press #(. navigation (navigate name))}]))
+
+(defn drawer-content [theme]
+  (fn [^js props]
+    (let [[year season] (a/get-year-and-season)
+          season-text   (-> season str/lower-case str/capitalize)
+          header-text   (str season-text " " year)
+          [bg-color text-color] (if (theme "dark") ["surface" "onSurface"] ["primary" "surface"])]
+      (r/as-element
+       [:> d/DrawerContentScrollView
+        {:contentContainerStyle {:padding-top 0}}
+        ;; TODO: display the selected users name and profile picture in addition
+        [:> rn/View
+         {:style {:background-color (get-in theme ["colors" bg-color])
+                  :height 100
+                  :align-items "center"
+                  :justify-content "center"}}
+         [:> p/Text
+          {:style {:color (get-in theme ["colors" text-color])
+                   :font-size 30}}
+          header-text]]
+
+        [:> (. p/Drawer -Section)
+         (drawer-item props "Backlog")
+         (drawer-item props "Countdown")]]))))
 
 (defn anime-icon [^js anime]
   (fn []
@@ -258,32 +293,40 @@
         base-theme (js->clj (if dark? p/DarkTheme p/DefaultTheme))]
     (merge base-theme
            theme-options
-           {:colors (merge (get base-theme "colors")
-                           colors
-                           (when dark?
-                             {"accent" "#bb86fc"})
-                           (when (and dark? amoled?)
-                             {"background" "#000000"}))})))
+           {"colors" (merge (get base-theme "colors")
+                            colors
+                            (when dark?
+                              {"accent" "#bb86fc"})
+                            (when (and dark? amoled?)
+                              {"background" "#000000"}))})))
 
 (defn app-root []
-  (let [stack  (createNativeStackNavigator)]
+  (let [drawer (createDrawerNavigator)]
     (go (<! (load-data))
         (<! (fetch-anime-data)))
     (fn []
-      [:> p/Provider
-       {:theme (theme)}
-       [:> n/NavigationContainer
-        [:> (. stack -Navigator)
-         {:initial-route-name "Weebmanager"
-          :screen-options {:header (header-bar)}}
-         [:> (. stack -Screen)
-          {:name "Weebmanager"
-           :component (main-screen)
-           :options {:animation "fade_from_bottom"}}]
-         [:> (. stack -Screen)
-          {:name "Settings"
-           :component (settings-screen)
-           :options {:animation "fade_from_bottom"}}]]]])))
+      (let [theme    (theme)
+            bg-color (get-in theme ["colors" "background"])]
+        [:> p/Provider
+         {:theme theme}
+         [:> n/NavigationContainer
+          [:> (. drawer -Navigator)
+           {:initial-route-name "Backlog"
+            :screen-options {:header (header-bar)
+                             :drawer-style {:background-color bg-color}}
+            :drawer-content (drawer-content theme)}
+           [:> (. drawer -Screen)
+            {:name "Backlog"
+             :component (main-screen)
+             :options {:animation "fade_from_bottom"}}]
+           [:> (. drawer -Screen)
+            {:name "Countdown"
+             :component (main-screen)
+             :options {:animation "fade_from_bottom"}}]
+           [:> (. drawer -Screen)
+            {:name "Settings"
+             :component (settings-screen)
+             :options {:animation "fade_from_bottom"}}]]]]))))
 
 (defn start []
   (.registerComponent AppRegistry
