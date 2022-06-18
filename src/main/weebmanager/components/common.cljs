@@ -58,14 +58,9 @@
   (go
     (let [{current-url :url} @iref
           profile-picture (<! (user-profile-picture username))]
-      (cond
-        (and (nil? profile-picture) current-url)
-        (do (prn "resetting pfp to nil")
-            (reset! iref {}))
-
-        (and profile-picture (not= profile-picture current-url))
-        (do (prn "setting pfp for" username "to" profile-picture)
-            (reset! iref {:url profile-picture :component (avatar profile-picture)}))))))
+      (when (and profile-picture (not= profile-picture current-url))
+        (prn "setting pfp for" username "to" profile-picture)
+        (reset! iref {:url profile-picture :component (avatar profile-picture)})))))
 
 (defn drawer-header []
   (let [profile-picture (r/atom {:url nil :component nil})]
@@ -73,6 +68,7 @@
       (let [{username :username} @mal-settings
             [year season] (a/get-year-and-season)
             season-text   (-> season str/lower-case str/capitalize (str " " year))
+            username      (-> username str/lower-case str/capitalize)
             [bg-color text-color] (if (theme "dark")
                                     ["surface" "onSurface"]
                                     ["primary" "surface"])]

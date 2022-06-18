@@ -126,10 +126,12 @@
        (map #(rename-keys % {:nextAiringEpisode :next-airing-episode}))
        go))
 
+;; TODO: find a better solution for this
+(def app-icon "https://raw.githubusercontent.com/Funkschy/weebmanager/master/android/app/src/main/play_store_512.png")
+
 (defn fetch-user-profile-picture [mal-username]
   (prn "fetching user pfp from jikan")
   (go
     (let [url  (str "https://api.jikan.moe/v4/users/" (url-escape mal-username))
           data (<! (get-url url {} {}))]
-      ;; TODO: add default image
-      (get-in data [:body :data :images :jpg :image_url]))))
+      (get-in data [:body :data :images :jpg :image_url] app-icon))))
