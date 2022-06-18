@@ -30,9 +30,12 @@
                          (reverse (map #(apply conj (vals %)) data)))))))]
     (inner start-url)))
 
+(defn url-escape [s]
+  (js/encodeURIComponent s))
+
 (defn mal-url [username endpoint]
   (str "https://api.myanimelist.net/v2/users/"
-       (js/encodeURIComponent username)
+       (url-escape username)
        endpoint))
 
 (defn fetch-mal-watching [username]
@@ -90,7 +93,7 @@
     [(.getFullYear date)
      (-> date .getMonth seasons)]))
 
-(defn fetch-behind-schedule [mal-username]
+(defn fetch-merged-data [mal-username]
   (go
     (let [mal-data (<! (fetch-mal-watching mal-username))
           ani-data (<! (apply fetch-anilist-airing (get-year-and-season)))]
@@ -105,25 +108,28 @@
              (group-by :id)
              vals
              (filter #(= 2 (count %)))
-             (map (partial apply merge))
-             (map #(conj % [:behind (behind-schedule %)]))
-             (filter (comp not zero? :behind)))))))
+             (map (partial apply merge)))))))
+
+(defn fetch-behind-schedule [mal-username]
+  (prn "fetching backlog")
+  (->> (fetch-merged-data mal-username)
+       <!
+       (map #(conj % [:behind (behind-schedule %)]))
+       (filter (comp not zero? :behind))
+       go))
 
 (defn fetch-countdowns [mal-username]
-  (go
-    (let [mal-data (<! (fetch-mal-watching mal-username))
-          ani-data (<! (apply fetch-anilist-airing (get-year-and-season)))]
-      (when (nil? mal-data)
-        (println "could not fetch mal data for" mal-username))
-      (when (nil? ani-data)
-        (println "could not currently running shows for" (get-year-and-season)))
-      (println mal-username "is watching" (count mal-data) "shows")
+  (prn "fetching countdowns")
+  (->> (fetch-merged-data mal-username)
+       <!
+       (filter :nextAiringEpisode)
+       (map #(rename-keys % {:nextAiringEpisode :next-airing-episode}))
+       go))
 
-      (when (and mal-data ani-data)
-        (->> (concat mal-data ani-data)
-             (group-by :id)
-             vals
-             (filter #(= 2 (count %)))
-             (map (partial apply merge))
-             (filter :nextAiringEpisode)
-             (map #(rename-keys % {:nextAiringEpisode :next-airing-episode})))))))
+(defn fetch-user-profile-picture [mal-username]
+  (prn "fetching user pfp from jikan")
+  (go
+    (let [url  (str "https://api.jikan.moe/v4/users/" (url-escape mal-username))
+          data (<! (get-url url {} {}))]
+      ;; TODO: add default image
+      (get-in data [:body :data :images :jpg :image_url]))))

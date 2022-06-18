@@ -6,6 +6,19 @@
    [weebmanager.anime :as a]
    [weebmanager.settings :refer [mal-settings]]))
 
+(def user-pictures
+  (r/atom {}))
+
+(defn user-profile-picture [username]
+  (go
+    (let [pictures @user-pictures]
+      (or (get pictures username)
+          (get (swap! user-pictures
+                      assoc
+                      username
+                      (<! (a/fetch-user-profile-picture username)))
+               username)))))
+
 (def backlog
   (r/atom {:animes []
            :loading? false}))

@@ -1,12 +1,16 @@
 (ns weebmanager.components.common
+  (:require-macros [cljs.core.async.macros :refer [go]])
   (:require
+   [cljs.core.async :refer [<!]]
    ["@react-navigation/drawer" :as d]
    [clojure.string :as str]
    ["react-native" :as rn]
    ["react-native-paper" :as p]
    ["react-native-vector-icons/MaterialIcons" :as m]
    [reagent.core :as r]
-   [weebmanager.anime :as a]))
+   [weebmanager.anime :as a]
+   [weebmanager.settings :refer [mal-settings]]
+   [weebmanager.state :refer [user-profile-picture]]))
 
 ;; sometimes imports from js/typescript libs are a bit weird
 (def MaterialIcon (. m -default))
@@ -18,6 +22,11 @@
       {:name name
        :color "white"
        :size 24}])))
+
+(defn avatar [uri]
+  (fn []
+    (r/as-element
+     [:> (. p/Avatar -Image) {:source {:uri uri}}])))
 
 (defn header-bar []
   (fn [^js props]
@@ -45,33 +54,55 @@
       :active (= (. current-route -name) name)
       :on-press #(. navigation (navigate name))}]))
 
-(defn drawer-content [theme]
-  (fn [^js props]
-    (let [[year season] (a/get-year-and-season)
-          season-text   (-> season str/lower-case str/capitalize)
-          header-text   (str season-text " " year)
-          [bg-color text-color] (if (theme "dark")
-                                  ["surface" "onSurface"]
-                                  ["primary" "surface"])]
-      (r/as-element
-       [:> d/DrawerContentScrollView
-        {:contentContainerStyle {:padding-top 0}}
-        ;; TODO: display the selected users name and profile picture in addition
+(defn- set-profile-picture [iref username]
+  (go
+    (let [{current-url :url} @iref
+          profile-picture (<! (user-profile-picture username))]
+      (cond
+        (and (nil? profile-picture) current-url)
+        (do (prn "resetting pfp to nil")
+            (reset! iref {}))
+
+        (and profile-picture (not= profile-picture current-url))
+        (do (prn "setting pfp for" username "to" profile-picture)
+            (reset! iref {:url profile-picture :component (avatar profile-picture)}))))))
+
+(defn drawer-header []
+  (let [profile-picture (r/atom {:url nil :component nil})]
+    (fn [theme]
+      (let [{username :username} @mal-settings
+            [year season] (a/get-year-and-season)
+            season-text   (-> season str/lower-case str/capitalize (str " " year))
+            [bg-color text-color] (if (theme "dark")
+                                    ["surface" "onSurface"]
+                                    ["primary" "surface"])]
+        (go (set-profile-picture profile-picture username))
         [:> rn/View
          {:style {:background-color (get-in theme ["colors" bg-color])
                   :height 100
-                  :align-items "center"
                   :justify-content "center"}}
-         [:> p/Text
-          {:style {:color (get-in theme ["colors" text-color])
-                   :font-size 30}}
-          header-text]]
+         [:> (. p/List -Section)
+          {:style {:background-color (get-in theme ["colors" bg-color])}}
+          [:> (. p/List -Item)
+           {:left (:component @profile-picture)
+            :title username
+            :description season-text
+            :description-style {:color (get-in theme ["colors" text-color])
+                                :padding-left 10}
+            :title-style {:color (get-in theme ["colors" text-color])
+                          :font-size 30
+                          :padding-left 10}}]]]))))
 
-        [:> (. p/Drawer -Section)
-         (drawer-item props "Backlog")
-         (drawer-item props "Countdown")]]))))
+(defn drawer-content [theme]
+  (fn [^js props]
+    (r/as-element
+     [:> d/DrawerContentScrollView
+      {:contentContainerStyle {:padding-top 0}}
+      [drawer-header theme]
+      [:> (. p/Drawer -Section)
+       {:title "Lists"}
+       (drawer-item props "Backlog")
+       (drawer-item props "Countdown")]])))
 
 (defn anime-icon [^js anime]
-  (fn []
-    (r/as-element
-     [:> (. p/Avatar -Image) {:source {:uri (-> anime .-item .-image)}}])))
+  (avatar (-> anime .-item .-image)))
