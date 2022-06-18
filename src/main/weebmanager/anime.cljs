@@ -3,7 +3,8 @@
   (:require [cljs-http.client :as http]
             [cljs.core.async :refer [<!]]
             [weebmanager.config :refer [config]]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [clojure.set :refer [rename-keys]]))
 
 (def client-id (get-in config [:mal :client-id]))
 
@@ -107,3 +108,22 @@
              (map (partial apply merge))
              (map #(conj % [:behind (behind-schedule %)]))
              (filter (comp not zero? :behind)))))))
+
+(defn fetch-countdowns [mal-username]
+  (go
+    (let [mal-data (<! (fetch-mal-watching mal-username))
+          ani-data (<! (apply fetch-anilist-airing (get-year-and-season)))]
+      (when (nil? mal-data)
+        (println "could not fetch mal data for" mal-username))
+      (when (nil? ani-data)
+        (println "could not currently running shows for" (get-year-and-season)))
+      (println mal-username "is watching" (count mal-data) "shows")
+
+      (when (and mal-data ani-data)
+        (->> (concat mal-data ani-data)
+             (group-by :id)
+             vals
+             (filter #(= 2 (count %)))
+             (map (partial apply merge))
+             (filter :nextAiringEpisode)
+             (map #(rename-keys % {:nextAiringEpisode :next-airing-episode})))))))

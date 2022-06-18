@@ -8,10 +8,11 @@
    ["react-native-paper" :as p]
    [reagent.core :as r]
    [weebmanager.components.backlog :as b]
+   [weebmanager.components.countdown :as c]
    [weebmanager.components.common :refer [drawer-content header-bar]]
    [weebmanager.components.settings :refer [settings-screen]]
    [weebmanager.settings :as s :refer [theme-settings]]
-   [weebmanager.state :refer [fetch-anime-data]]))
+   [weebmanager.state :refer [fetch-backlog-data fetch-countdown-data]]))
 
 (def colors
   {"accent" "#6200ee"})
@@ -35,7 +36,8 @@
 (defn app-root []
   (let [drawer (d/createDrawerNavigator)]
     (go (<! (s/load-all-settings))
-        (<! (fetch-anime-data)))
+        (fetch-backlog-data)
+        (fetch-countdown-data))
     (fn []
       (let [theme    (theme)
             bg-color (get-in theme ["colors" "background"])]
@@ -53,7 +55,7 @@
              :options {:animation "fade_from_bottom"}}]
            [:> (. drawer -Screen)
             {:name "Countdown"
-             :component (b/backlog-screen)
+             :component (c/countdown-screen)
              :options {:animation "fade_from_bottom"}}]
            [:> (. drawer -Screen)
             {:name "Settings"

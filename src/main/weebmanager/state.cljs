@@ -6,14 +6,24 @@
    [weebmanager.anime :as a]
    [weebmanager.settings :refer [mal-settings]]))
 
-(def state
+(def backlog
   (r/atom {:animes []
            :loading? false}))
 
-(defn fetch-anime-data []
+(def countdown
+  (r/atom {:animes []
+           :loading? false}))
+
+(defn- fetch-data [iref f]
   (go
-    (swap! state assoc :loading? true)
+    (swap! iref assoc :loading? true)
     (let [{:keys [username]} @mal-settings
-          animes   (<! (a/fetch-behind-schedule username))]
-      (swap! state assoc :animes animes)
-      (swap! state assoc :loading? false))))
+          animes   (<! (f username))]
+      (swap! iref assoc :animes animes)
+      (swap! iref assoc :loading? false))))
+
+(defn fetch-backlog-data []
+  (fetch-data backlog a/fetch-behind-schedule))
+
+(defn fetch-countdown-data []
+  (fetch-data countdown a/fetch-countdowns))

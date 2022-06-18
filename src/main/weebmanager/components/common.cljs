@@ -70,3 +70,8 @@
         [:> (. p/Drawer -Section)
          (drawer-item props "Backlog")
          (drawer-item props "Countdown")]]))))
+
+(defn anime-icon [^js anime]
+  (fn []
+    (r/as-element
+     [:> (. p/Avatar -Image) {:source {:uri (-> anime .-item .-image)}}])))

@@ -4,15 +4,9 @@
    ["react-native-paper" :as p]
    [reagent.core :as r]
    [weebmanager.settings :as s :refer [basic-settings]]
-   [weebmanager.state :refer [state fetch-anime-data]]))
-
-(defn pluralize [noun count]
-  (str count " " noun (when (> count 1) "s")))
-
-(defn anime-icon [^js anime]
-  (fn []
-    (r/as-element
-     [:> (. p/Avatar -Image) {:source {:uri (-> anime .-item .-image)}}])))
+   [weebmanager.state :refer [backlog fetch-backlog-data]]
+   [weebmanager.components.common :refer [anime-icon]]
+   [weebmanager.components.util :refer [pluralize get-title]]))
 
 (defn anime-list-entry [^js anime]
   (r/as-element
@@ -23,13 +17,8 @@
                        (pluralize "episode" (-> anime .-item .-behind))
                        " behind")}]))
 
-(defn get-title [title-options preferred-title-language]
-  (get title-options
-       preferred-title-language
-       (first (vals title-options))))
-
 (defn backlog-screen []
-  (let [{:keys [animes loading?]} @state
+  (let [{:keys [animes loading?]} @backlog
         {:keys [title-language]}  @basic-settings]
     (p/withTheme
      (fn [^js props]
@@ -44,7 +33,7 @@
                    :margin-bottom 40
                    :align-self :stretch}
            :refreshing loading?
-           :on-refresh fetch-anime-data
+           :on-refresh fetch-backlog-data
            :data (map (fn [{:keys [title main_picture behind]}]
                         (let [title (get-title title title-language)]
                           {:id title
