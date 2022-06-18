@@ -123,7 +123,7 @@
   (->> (fetch-merged-data mal-username)
        <!
        (filter :nextAiringEpisode)
-       (map #(rename-keys % {:nextAiringEpisode :next-airing-episode}))
+       (sort-by (comp :timeUntilAiring :nextAiringEpisode))
        go))
 
 ;; TODO: find a better solution for this

@@ -57,11 +57,11 @@
                    :align-self :stretch}
            :refreshing loading?
            :on-refresh fetch-countdown-data
-           :data (map (fn [{:keys [title main_picture next-airing-episode]}]
+           :data (map (fn [{:keys [title main_picture nextAiringEpisode]}]
                         (let [title (get-title title title-language)]
                           {:id title
                            :name title
-                           :next_ep next-airing-episode
+                           :next_ep nextAiringEpisode
                            :image (get main_picture :medium "")}))
                       animes)
            :render-item anime-list-entry}]])))))
