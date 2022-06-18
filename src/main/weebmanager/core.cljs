@@ -1,89 +1,23 @@
 (ns weebmanager.core
   (:require-macros [cljs.core.async.macros :refer [go]])
   (:require
-   ["@react-native-async-storage/async-storage" :as storage]
-   ["@react-navigation/drawer" :as d :refer [createDrawerNavigator]]
+   ["@react-navigation/drawer" :as d]
    ["@react-navigation/native" :as n]
    [cljs.core.async :refer [<!]]
-   [cljs.core.async.interop :refer-macros [<p!]]
    [clojure.string :as str]
    ["react-native" :as rn :refer [AppRegistry]]
    ["react-native-paper" :as p]
    ["react-native-vector-icons/MaterialIcons" :as m]
    [reagent.core :as r]
-   [weebmanager.anime :as a]))
+   [weebmanager.anime :as a]
+   [weebmanager.settings :as s :refer [basic-settings mal-settings theme-settings]]))
 
 ;; sometimes imports from js/typescript libs are a bit weird
 (def MaterialIcon (. m -default))
-(def AsyncStorage (. storage -default))
-
-;; this can't be included in basic settings, because if it was, the entire settings page would
-;; refresh everytime the user changes some basic setting
-(def theme-settings
-  (r/atom {:dark? true
-           :amoled? false}))
-
-;; this will be set to "funkschy" in debug builds by the shadow-cljs config
-(goog-define default-username "")
-
-(def basic-settings
-  (r/atom {:title-language :romaji}))
-
-(def mal-settings
-  (r/atom {:username default-username}))
 
 (def state
   (r/atom {:animes []
            :loading? false}))
-
-(defn boolean-default-true [value]
-  (not= "false" value))
-
-(defn boolean-default-false [value]
-  (= "true" value))
-
-(defn simple-default [default]
-  (fn [value]
-    (or value default)))
-
-(defn setting [atom path save-key save-map load-map]
-  {:atom atom :path path :save-key save-key :save-map save-map :load-map load-map})
-
-(def settings
-  [(setting mal-settings [:username] "@username" identity (simple-default default-username))
-   (setting theme-settings [:dark?] "@dark" str boolean-default-true)
-   (setting theme-settings [:amoled?] "@amoled" str boolean-default-false)
-   (setting basic-settings [:title-language] "@title-language" name (comp (simple-default :romaji) keyword))])
-
-(defn load-setting [{:keys [atom path save-key load-map]}]
-  (->> save-key
-       (.getItem AsyncStorage)
-       <p!
-       load-map
-       (swap! atom assoc-in path)
-       go))
-
-(defn save-setting [{:keys [atom path save-key save-map]}]
-  (->> path
-       (get-in @atom)
-       save-map
-       (.setItem AsyncStorage save-key)))
-
-(defn load-data []
-  (go
-    (try
-      (doseq [setting settings]
-        (<! (load-setting setting)))
-      (catch js/Error e
-        (prn e)))))
-
-(defn save-data []
-  (go
-    (try
-      (doseq [setting settings]
-        (save-setting setting))
-      (catch js/Error e
-        (prn e)))))
 
 (defn pluralize [noun count]
   (str count " " noun (when (> count 1) "s")))
@@ -103,13 +37,7 @@
        [:> (. p/Appbar -Header)
         [:> (. p/Appbar -Action)
          {:icon (appbar-icon "menu")
-          :on-press
-          #(do (-> props .-navigation .openDrawer)
-                 ;; TODO: this is a bad solution, because it doesn't work when the user swipes left
-                 ;;  from the right side of the screen, which is more common than hitting the back
-                 ;;  button. Maybe add-watch on the atom instead?
-               (when (= route-name "Settings")
-                 (save-data)))}]
+          :on-press #(-> props .-navigation .openDrawer)}]
 
         [:> (. p/Appbar -Content)
          {:title route-name}]
@@ -301,8 +229,8 @@
                               {"background" "#000000"}))})))
 
 (defn app-root []
-  (let [drawer (createDrawerNavigator)]
-    (go (<! (load-data))
+  (let [drawer (d/createDrawerNavigator)]
+    (go (<! (s/load-all-settings))
         (<! (fetch-anime-data)))
     (fn []
       (let [theme    (theme)
