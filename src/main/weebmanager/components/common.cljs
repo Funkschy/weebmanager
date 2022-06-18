@@ -86,7 +86,7 @@
             :description-style {:color (get-in theme ["colors" text-color])
                                 :padding-left 10}
             :title-style {:color (get-in theme ["colors" text-color])
-                          :font-size 30
+                          :font-size 24
                           :padding-left 10}}]]]))))
 
 (defn drawer-content [theme]
