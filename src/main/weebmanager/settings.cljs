@@ -35,7 +35,6 @@
     (or value default)))
 
 (defn save-setting [save-key value]
-  (prn "saving" save-key value)
   (.setItem AsyncStorage save-key value))
 
 (defn def-setting! [atom path save-key save-map load-map]
