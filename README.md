@@ -20,7 +20,7 @@ As soon as the season changes, it will only display the shows from the new seaso
 
 ## Screenshots
 
-![Drawer](drawer-dark.png)
-![Seasonal Backlog](backlog-light.png)
-![Countdown until next episodes](countdown-dark.png)
-![settings screen](settings-amoled.png)
+![Drawer](drawer-dark-scaled.png)
+![Seasonal Backlog](backlog-light-scaled.png)
+![Countdown until next episodes](countdown-dark-scaled.png)
+![settings screen](settings-amoled-scaled.png)
