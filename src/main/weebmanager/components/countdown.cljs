@@ -25,7 +25,7 @@
   (let [formatted (->> time-units
                        (map second)
                        (map vector (split-time-units seconds))
-                       (drop-while (comp zero? first))
+                       (remove (comp zero? first))
                        (map (fn [[value unit]] (pluralize unit value)))
                        (str/join " - "))]
     (if (empty? formatted)
