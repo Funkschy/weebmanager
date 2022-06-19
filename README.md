@@ -20,6 +20,7 @@ As soon as the season changes, it will only display the shows from the new seaso
 
 ## Screenshots
 
-![Main overview screen](main-view-dark-romaji.png)
-![Main overview screen](main-view-light-native.png)
-![settings screen](settings-view.png)
+![Drawer](drawer-dark.png)
+![Seasonal Backlog](backlog-light.png)
+![Countdown until next episodes](countdown-dark.png)
+![settings screen](settings-amoled.png)
