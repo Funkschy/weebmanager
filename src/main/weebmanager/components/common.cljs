@@ -102,3 +102,48 @@
 
 (defn anime-icon [^js anime]
   (avatar (-> anime .-item .-image)))
+
+(defn make-anime-list-entry [description-fn]
+  (fn [^js anime]
+    (r/as-element
+     [:> (. p/List -Item)
+      {:left (anime-icon anime)
+       :title (-> anime .-item .-name)
+       :description (description-fn anime)}])))
+
+(defn error-list-entry [^js error]
+  (r/as-element
+   [:> (. p/List -Item)
+    {:title "Could not fetch anime data"
+     :description (str "Reason: " (-> error .-item .-reason))}]))
+
+(defn anime-list-screen
+  [make-anime-prop
+   make-list-item
+   refresh-data
+   & {:keys [animes loading? error]}]
+  (p/withTheme
+   (fn [^js props]
+     (r/as-element
+      [:> rn/View
+       {:style {:flex 1
+                :background-color (-> props .-theme .-colors .-background)
+                :padding-top 0}}
+
+       (if-not error
+         [:> rn/FlatList
+          {:style {:margin 4
+                   :margin-bottom 40
+                   :align-self :stretch}
+           :refreshing loading?
+           :on-refresh refresh-data
+           :data (map make-anime-prop animes)
+           :render-item make-list-item}]
+         [:> rn/FlatList
+          {:style {:margin 4
+                   :margin-bottom 40
+                   :align-self :stretch}
+           :refreshing loading?
+           :on-refresh refresh-data
+           :data [{:reason error}]
+           :render-item error-list-entry}])]))))

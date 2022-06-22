@@ -4,7 +4,8 @@
    [cljs.core.async :refer [<!]]
    [reagent.core :as r]
    [weebmanager.anime :as a]
-   [weebmanager.settings :refer [mal-settings]]))
+   [weebmanager.settings :refer [mal-settings]]
+   [weebmanager.error :refer [error? reason]]))
 
 (def user-pictures
   (r/atom {}))
@@ -21,19 +22,22 @@
 
 (def backlog
   (r/atom {:animes []
+           :error nil
            :loading? false}))
 
 (def countdown
   (r/atom {:animes []
+           :error nil
            :loading? false}))
 
 (defn- fetch-data [iref f]
   (go
-    (swap! iref assoc :loading? true)
+    (swap! iref assoc :loading? true :error nil)
     (let [{:keys [username]} @mal-settings
-          animes   (<! (f username))]
-      (swap! iref assoc :animes animes)
-      (swap! iref assoc :loading? false))))
+          result (<! (f username))]
+      (if (error? result)
+        (swap! iref assoc :error (reason result) :loading? false :animes [])
+        (swap! iref assoc :animes result :loading? false)))))
 
 (defn fetch-backlog-data []
   (fetch-data backlog a/fetch-behind-schedule))

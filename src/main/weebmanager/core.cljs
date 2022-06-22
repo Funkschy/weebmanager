@@ -14,6 +14,8 @@
    [weebmanager.settings :as s :refer [theme-settings]]
    [weebmanager.state :refer [fetch-backlog-data fetch-countdown-data]]))
 
+;; TODO: why is there a main namespace?
+
 (def colors
   {"accent" "#6200ee"})
 
