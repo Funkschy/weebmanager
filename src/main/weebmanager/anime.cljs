@@ -14,6 +14,10 @@
   Error
   (reason [_] (name error-code)))
 
+(defrecord UserError [reason]
+  Error
+  (reason [_] reason))
+
 (defn get-url [url params headers]
   (->> {:query-params params
         :headers headers
@@ -114,24 +118,26 @@
 
 (defn transduce-merged-data [mal-username xf f map-result]
   (go
-    (let [mal-data (fetch-mal-watching mal-username)
-          ani-data (apply fetch-anilist-airing (get-year-and-season))
-          mal-data (<! mal-data)
-          ani-data (<! ani-data)
-          combined-xf (comp (filter #(= 2 (count %)))
-                            (map (partial apply merge))
-                            xf)]
-      (cond
-        (nil? mal-data) (println "could not fetch mal data for" mal-username)
-        (nil? ani-data) (println "could not currently running shows for" (get-year-and-season))
-        (error? mal-data) mal-data
-        (error? ani-data) ani-data
-        :else
-        (->> (concat mal-data ani-data)
-             (group-by :id)
-             vals
-             (transduce combined-xf f)
-             map-result)))))
+    (if-not (empty? mal-username)
+      (let [mal-data (fetch-mal-watching mal-username)
+            ani-data (apply fetch-anilist-airing (get-year-and-season))
+            mal-data (<! mal-data)
+            ani-data (<! ani-data)
+            combined-xf (comp (filter #(= 2 (count %)))
+                              (map (partial apply merge))
+                              xf)]
+        (cond
+          (nil? mal-data) (println "could not fetch mal data for" mal-username)
+          (nil? ani-data) (println "could not currently running shows for" (get-year-and-season))
+          (error? mal-data) mal-data
+          (error? ani-data) ani-data
+          :else
+          (->> (concat mal-data ani-data)
+               (group-by :id)
+               vals
+               (transduce combined-xf f)
+               map-result)))
+      (UserError. "Please enter your MAL username in the settings"))))
 
 (defn fetch-merged-data [mal-username xf]
   (transduce-merged-data mal-username xf conj identity))

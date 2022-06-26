@@ -121,13 +121,15 @@
      {:name icon-name
       :color "white"
       :size 40}]
-    [:> p/Text text]]))
+    [:> p/Text
+     {:style {:text-align :center}}
+     text]]))
 
 (defn- empty-list-view [text]
   (list-empty-component text "sentiment-dissatisfied"))
 
 (defn- error-list-view [reason]
-  (list-empty-component (str "Could not fetch animes: " reason) "sentiment-very-dissatisfied"))
+  (list-empty-component (str "Could not fetch animes: \n" reason) "sentiment-very-dissatisfied"))
 
 (defn- anime-flat-list [loading? refresh-data data make-list-item empty-component]
   [:> rn/FlatList
