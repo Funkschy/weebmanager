@@ -111,11 +111,35 @@
        :title (-> anime .-item .-name)
        :description (description-fn anime)}])))
 
-(defn error-list-entry [^js error]
+(defn list-empty-component [text icon-name]
   (r/as-element
-   [:> (. p/List -Item)
-    {:title "Could not fetch anime data"
-     :description (str "Reason: " (-> error .-item .-reason))}]))
+   [:> rn/View
+    {:style {:justify-content :center
+             :align-items :center
+             :flex 1}}
+    [:> MaterialIcon
+     {:name icon-name
+      :color "white"
+      :size 40}]
+    [:> p/Text text]]))
+
+(defn- empty-list-view [text]
+  (list-empty-component text "sentiment-dissatisfied"))
+
+(defn- error-list-view [reason]
+  (list-empty-component (str "Could not fetch animes: " reason) "sentiment-very-dissatisfied"))
+
+(defn- anime-flat-list [loading? refresh-data data make-list-item empty-component]
+  [:> rn/FlatList
+   {:style {:margin 4
+            :margin-bottom 40
+            :flex 1}
+    :content-container-style {:flex-grow 1}
+    :refreshing loading?
+    :on-refresh refresh-data
+    :data data
+    :render-item make-list-item
+    :ListEmptyComponent empty-component}])
 
 (defn anime-list-screen
   [make-anime-prop
@@ -130,20 +154,10 @@
                 :background-color (-> props .-theme .-colors .-background)
                 :padding-top 0}}
 
-       (if-not error
-         [:> rn/FlatList
-          {:style {:margin 4
-                   :margin-bottom 40
-                   :align-self :stretch}
-           :refreshing loading?
-           :on-refresh refresh-data
-           :data (map make-anime-prop animes)
-           :render-item make-list-item}]
-         [:> rn/FlatList
-          {:style {:margin 4
-                   :margin-bottom 40
-                   :align-self :stretch}
-           :refreshing loading?
-           :on-refresh refresh-data
-           :data [{:reason error}]
-           :render-item error-list-entry}])]))))
+       (anime-flat-list loading?
+                        refresh-data
+                        (map make-anime-prop animes)
+                        make-list-item
+                        (if-not error
+                          (empty-list-view "No anime here")
+                          (error-list-view error)))]))))
