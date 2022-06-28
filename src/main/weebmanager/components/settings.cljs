@@ -4,7 +4,8 @@
    ["react-native" :as rn]
    ["react-native-paper" :as p]
    [reagent.core :as r]
-   [weebmanager.settings :as s :refer [basic-settings mal-settings theme-settings]]))
+   [weebmanager.settings :as s :refer [basic-settings mal-settings request-settings
+                                       theme-settings]]))
 
 (defn settings-entry [component & {:keys [title description style]}]
   [:> (. p/List -Item)
@@ -24,6 +25,19 @@
          :default-value username
          :on-change-text #(swap! mal-settings assoc :username %)
          :placeholder "Your myanimelist.net username"}]])))
+
+(defn request-timeout-input []
+  (let [{:keys [request-timeout]} @request-settings]
+    (fn []
+      [:> rn/View
+       {:style {:align-items :stretch
+                :margin 15}}
+       [:> p/TextInput
+        {:label "Request Timeout"
+         :default-value (str request-timeout)
+         :on-change-text #(swap! request-settings assoc :request-timeout %)
+         :keyboard-type :numeric
+         :right (r/as-element [:> (. p/TextInput -Affix) {:text "secs"}])}]])))
 
 (defn radio-button [key settings-atom settings-path]
   (let [status   (if (= key (get-in @settings-atom settings-path)) "checked" "unchecked")
@@ -53,31 +67,38 @@
     (p/withTheme
      (fn [^js props]
        (r/as-element
-        [:> rn/View
-         {:style {:flex 1
+        [:> rn/KeyboardAvoidingView
+         {:behavior :height
+          :keyboard-vertical-offset 100
+          :style {:flex 1
                   :background-color (-> props .-theme .-colors .-background)
                   :padding-top 0}}
+         [:> rn/TouchableWithoutFeedback
+          [:> rn/ScrollView
+           [:> (. p/List -Section)
+            [:> (. p/List -Subheader) "Display"]
+            [settings-entry
+             [:> p/Switch
+              {:value dark?
+               :on-value-change #(swap! theme-settings update :dark? not)}]
+             :title "Dark theme"
+             :description "Change this if you hate your eyes"]
 
-         [:> (. p/List -Section)
-          [:> (. p/List -Subheader) "Basics"]
-          [settings-entry
-           [:> p/Switch
-            {:value dark?
-             :on-value-change #(swap! theme-settings update :dark? not)}]
-           :title "Dark theme"
-           :description "Change this if you hate your eyes"]
+            [settings-entry
+             [:> p/Switch
+              {:value amoled?
+               :on-value-change #(swap! theme-settings update :amoled? not)}]
+             :title "AMOLED"
+             :description "If you love your eyes and your battery"]
 
-          [settings-entry
-           [:> p/Switch
-            {:value amoled?
-             :on-value-change #(swap! theme-settings update :amoled? not)}]
-           :title "AMOLED"
-           :description "If you love your eyes and your battery"]
+            [title-language-setting]]
 
-          [title-language-setting]]
+           [:> p/Divider]
 
-         [:> p/Divider]
+           [:> (. p/List -Section)
+            [:> (. p/List -Subheader) "MyAnimeList"]
+            [username-input]]
 
-         [:> (. p/List -Section)
-          [:> (. p/List -Subheader) "MyAnimeList"]
-          [username-input]]])))))
+           [:> (. p/List -Section)
+            [:> (. p/List -Subheader) "Network"]
+            [request-timeout-input]]]]])))))

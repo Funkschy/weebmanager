@@ -21,6 +21,9 @@
 (def basic-settings
   (r/atom {:title-language :romaji}))
 
+(def request-settings
+  (r/atom {:request-timeout 3.0}))
+
 (def mal-settings
   (r/atom {:username default-username}))
 
@@ -49,7 +52,8 @@
   [(def-setting! mal-settings [:username] "@username" identity (simple-default default-username))
    (def-setting! theme-settings [:dark?] "@dark" str boolean-default-true)
    (def-setting! theme-settings [:amoled?] "@amoled" str boolean-default-false)
-   (def-setting! basic-settings [:title-language] "@title-language" name (comp (simple-default :romaji) keyword))])
+   (def-setting! basic-settings [:title-language] "@title-language" name (comp (simple-default :romaji) keyword))
+   (def-setting! request-settings [:request-timeout] "@request-timeout" str (fnil parse-double "3.0"))])
 
 (defn load-setting [{:keys [atom path save-key load-map]}]
   (->> save-key

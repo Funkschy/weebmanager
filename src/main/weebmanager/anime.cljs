@@ -5,10 +5,10 @@
    [cljs.core.async :refer [<!]]
    [clojure.string :as str]
    [weebmanager.error :refer [Error error?]]
-   [weebmanager.config :refer [config]]))
+   [weebmanager.config :refer [config]]
+   [weebmanager.settings :refer [request-settings]]))
 
 (def client-id (get-in config [:mal :client-id]))
-(def timeout 3000)
 
 (defrecord HttpError [status-code error-code]
   Error
@@ -19,12 +19,13 @@
   (reason [_] reason))
 
 (defn get-url [url params headers]
-  (->> {:query-params params
-        :headers headers
-        :timeout timeout}
-       (http/get url)
-       <!
-       go))
+  (let [{:keys [request-timeout]} @request-settings]
+    (->> {:query-params params
+          :headers headers
+          :timeout (* request-timeout 1000)}
+         (http/get url)
+         <!
+         go)))
 
 (defn fetch-mal-api [url params]
   (go
@@ -88,11 +89,12 @@
                              "type"   "ANIME"
                              "year"   (str year \%)}}]
     (go
-      (let [{:keys [status body error-code]}
+      (let [{:keys [request-timeout]} @request-settings
+            {:keys [status body error-code]}
             (<! (http/post "https://graphql.anilist.co"
                            {:headers {"Content-Type" "application/json"}
                             :body (. js/JSON stringify (clj->js params))
-                            :timeout timeout}))]
+                            :timeout (* request-timeout 1000)}))]
         (if-not (= 200 status)
           (do (println "Could not get anilist data" status error-code)
               (HttpError. status error-code))

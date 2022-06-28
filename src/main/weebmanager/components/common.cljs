@@ -110,24 +110,24 @@
        :title (-> anime .-item .-name)
        :description (description-fn anime)}])))
 
-(defn list-empty-component [text icon-name]
+(defn list-empty-component [text icon-name color]
   [:> rn/View
    {:style {:justify-content :center
             :align-items :center
             :flex 1}}
    [:> MaterialIcon
     {:name icon-name
-     :color "white"
+     :color color
      :size 40}]
    [:> p/Text
     {:style {:text-align :center}}
     text]])
 
-(defn- empty-list-view [text]
-  [list-empty-component text "sentiment-dissatisfied"])
+(defn- empty-list-view [text color]
+  [list-empty-component text "sentiment-dissatisfied" color])
 
-(defn- error-list-view [reason]
-  [list-empty-component (str "Could not fetch animes:\n" reason) "sentiment-very-dissatisfied"])
+(defn- error-list-view [reason color]
+  [list-empty-component (str "Could not fetch animes:\n" reason) "sentiment-very-dissatisfied" color])
 
 (defn- anime-flat-list [loading? refresh-data data make-list-item empty-component]
   [:> rn/FlatList
@@ -148,17 +148,19 @@
    & {:keys [animes loading? error]}]
   (p/withTheme
    (fn [^js props]
-     (r/as-element
-      [:> rn/View
-       {:style {:flex 1
-                :background-color (-> props .-theme .-colors .-background)
-                :padding-top 0}}
+     (let [bg-color   (-> props .-theme .-colors .-background)
+           text-color (-> props .-theme .-colors .-text)]
+       (r/as-element
+        [:> rn/View
+         {:style {:flex 1
+                  :background-color bg-color
+                  :padding-top 0}}
 
-       [anime-flat-list loading?
-        refresh-data
-        (map make-anime-prop animes)
-        make-list-item
-        (r/as-element
-         (if-not error
-           [empty-list-view "No anime here"]
-           [error-list-view error]))]]))))
+         [anime-flat-list loading?
+          refresh-data
+          (map make-anime-prop animes)
+          make-list-item
+          (r/as-element
+           (if-not error
+             [empty-list-view "No anime here" text-color]
+             [error-list-view error text-color]))]])))))
