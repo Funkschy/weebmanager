@@ -16,12 +16,15 @@
 (def MaterialIcon (. m -default))
 
 (defn appbar-icon [name]
-  (fn []
-    (r/as-element
-     [:> MaterialIcon
-      {:name name
-       :color "white"
-       :size 24}])))
+  [:> MaterialIcon
+   {:name name
+    :color "white"
+    :size 24}])
+
+(defn appbar-action [icon-name on-press]
+  [:> (. p/Appbar -Action)
+   {:icon (fn [] (r/as-element [appbar-icon icon-name]))
+    :on-press on-press}])
 
 (defn avatar [uri]
   (fn []
@@ -33,19 +36,15 @@
     (let [route-name  (-> props .-route .-name)]
       (r/as-element
        [:> (. p/Appbar -Header)
-        [:> (. p/Appbar -Action)
-         {:icon (appbar-icon "menu")
-          :on-press #(-> props .-navigation .openDrawer)}]
+        [appbar-action "menu" #(-> props .-navigation .openDrawer)]
 
         [:> (. p/Appbar -Content)
          {:title route-name}]
 
         (when-not (= route-name "Settings")
-          [:> (. p/Appbar -Action)
-           {:icon "dots-vertical"
-            :on-press #(-> props .-navigation (.navigate "Settings"))}])]))))
+          [appbar-action "more-vert" #(-> props .-navigation (.navigate "Settings"))])]))))
 
-(defn drawer-item [props name]
+(defn- drawer-item [props name]
   (let [^js navigation (. props -navigation)
         ^js nav-state  (. navigation getState)
         current-route  (aget (. nav-state -routes) (. nav-state -index))]
@@ -62,7 +61,7 @@
         (prn "setting pfp for" username "to" profile-picture)
         (reset! iref {:url profile-picture :component (avatar profile-picture)})))))
 
-(defn drawer-header []
+(defn- drawer-header []
   (let [profile-picture (r/atom {:url nil :component nil})]
     (fn [theme]
       (let [{username :username} @mal-settings
@@ -97,8 +96,8 @@
       [drawer-header theme]
       [:> (. p/Drawer -Section)
        {:title "Lists"}
-       (drawer-item props "Backlog")
-       (drawer-item props "Countdown")]])))
+       [drawer-item props "Backlog"]
+       [drawer-item props "Countdown"]]])))
 
 (defn anime-icon [^js anime]
   (avatar (-> anime .-item .-image)))
@@ -112,24 +111,23 @@
        :description (description-fn anime)}])))
 
 (defn list-empty-component [text icon-name]
-  (r/as-element
-   [:> rn/View
-    {:style {:justify-content :center
-             :align-items :center
-             :flex 1}}
-    [:> MaterialIcon
-     {:name icon-name
-      :color "white"
-      :size 40}]
-    [:> p/Text
-     {:style {:text-align :center}}
-     text]]))
+  [:> rn/View
+   {:style {:justify-content :center
+            :align-items :center
+            :flex 1}}
+   [:> MaterialIcon
+    {:name icon-name
+     :color "white"
+     :size 40}]
+   [:> p/Text
+    {:style {:text-align :center}}
+    text]])
 
 (defn- empty-list-view [text]
-  (list-empty-component text "sentiment-dissatisfied"))
+  [list-empty-component text "sentiment-dissatisfied"])
 
 (defn- error-list-view [reason]
-  (list-empty-component (str "Could not fetch animes:\n" reason) "sentiment-very-dissatisfied"))
+  [list-empty-component (str "Could not fetch animes:\n" reason) "sentiment-very-dissatisfied"])
 
 (defn- anime-flat-list [loading? refresh-data data make-list-item empty-component]
   [:> rn/FlatList
@@ -156,10 +154,11 @@
                 :background-color (-> props .-theme .-colors .-background)
                 :padding-top 0}}
 
-       (anime-flat-list loading?
-                        refresh-data
-                        (map make-anime-prop animes)
-                        make-list-item
-                        (if-not error
-                          (empty-list-view "No anime here")
-                          (error-list-view error)))]))))
+       [anime-flat-list loading?
+        refresh-data
+        (map make-anime-prop animes)
+        make-list-item
+        (r/as-element
+         (if-not error
+           [empty-list-view "No anime here"]
+           [error-list-view error]))]]))))

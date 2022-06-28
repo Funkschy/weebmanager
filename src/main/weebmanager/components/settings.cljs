@@ -60,19 +60,19 @@
 
          [:> (. p/List -Section)
           [:> (. p/List -Subheader) "Basics"]
-          (settings-entry
+          [settings-entry
            [:> p/Switch
             {:value dark?
              :on-value-change #(swap! theme-settings update :dark? not)}]
            :title "Dark theme"
-           :description "Change this if you hate your eyes")
+           :description "Change this if you hate your eyes"]
 
-          (settings-entry
+          [settings-entry
            [:> p/Switch
             {:value amoled?
              :on-value-change #(swap! theme-settings update :amoled? not)}]
            :title "AMOLED"
-           :description "If you love your eyes and your battery")
+           :description "If you love your eyes and your battery"]
 
           [title-language-setting]]
 
