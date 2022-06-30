@@ -37,6 +37,7 @@
 
 (defn app-root []
   (let [drawer (d/createDrawerNavigator)]
+    ;; TODO: this fetches the same data twice, which is unnecessary
     (go (<! (s/load-all-settings))
         (fetch-backlog-data)
         (fetch-countdown-data))
