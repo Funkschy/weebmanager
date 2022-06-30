@@ -63,6 +63,27 @@
   (fetch-mal-api-seq (mal-url username "/animelist")
                      {"fields" "list_status,alternative_titles" "status" "watching" "limit" 500}))
 
+(def last-season-residue-query
+  "query seasonal($page: Int = 1, $type: MediaType, $lastSeason: MediaSeason, $year: Int, $sort: [MediaSort] = [POPULARITY_DESC, SCORE_DESC]) {
+     Page(page: $page, perPage: 100) {
+       media(type: $type, season: $lastSeason, seasonYear: $year, sort: $sort, episodes_greater: 12, status: RELEASING) {
+         id: idMal
+         status
+         title {
+           english
+           romaji
+           native
+         }
+         episodes
+         nextAiringEpisode {
+           airingAt
+           timeUntilAiring
+           episode
+         }
+       }
+     }
+   }")
+
 (def airing-eps-query
   ;; TODO: fetch additional pages
   ;;   this will only get the first 50 (that's the actual limit) shows, but the user might need the
@@ -86,11 +107,9 @@
        }
    }")
 
-(defn fetch-anilist-airing [year season]
-  (let [params {"query" airing-eps-query
-                "variables" {"season" (str/upper-case season)
-                             "type"   "ANIME"
-                             "year"   (str year \%)}}]
+(defn- fetch-anilist [query variables]
+  (let [params {"query" query
+                "variables" variables}]
     (go
       (let [{:keys [request-timeout]} @request-settings
             {:keys [status body error-code]}
@@ -102,6 +121,35 @@
           (do (println "Could not get anilist data" status error-code)
               (HttpError. status error-code))
           (get-in body [:data :Page :media]))))))
+
+(def seasons ["WINTER" "SPRING" "SUMMER" "FALL"])
+(defn get-year-and-seasons []
+  (let [date        (new js/Date)
+        year        (.getFullYear date)
+        season-int  (quot (.getMonth date) 3)
+
+        [last-season-year last-season-int]
+        (if (zero? season-int)
+          [(dec year) 3] ;; current season = WINTER <=> last season was fall of last year
+          [year (dec season-int)])]
+    [year
+     (get seasons season-int)
+     last-season-year
+     (get seasons last-season-int)]))
+
+(defn fetch-anilist-airing []
+  (let [[year season] (get-year-and-seasons)]
+    (fetch-anilist airing-eps-query
+                   {"season" season
+                    "type"   "ANIME"
+                    "year"   year})))
+
+(defn fetch-anilist-last-season-residue []
+  (let [[_ _ last-season-year last-season] (get-year-and-seasons)]
+    (fetch-anilist last-season-residue-query
+                   {"lastSeason" last-season
+                    "type"       "ANIME"
+                    "year"       last-season-year})))
 
 (defn current-episode [anime-info]
   (if (anime-info :nextAiringEpisode)
@@ -115,29 +163,27 @@
       (- current watched)
       0)))
 
-(defn get-year-and-season []
-  (let [seasons (into [] (mapcat (partial repeat 3) ["WINTER" "SPRING" "SUMMER" "FALL"]))
-        date    (new js/Date)]
-    [(.getFullYear date)
-     (-> date .getMonth seasons)]))
-
 (defn transduce-merged-data [mal-username xf f map-result]
   (go
     (if-not (empty? mal-username)
       (let [mal-data (fetch-mal-watching mal-username)
-            ani-data (apply fetch-anilist-airing (get-year-and-season))
+            ani-data (fetch-anilist-airing)
+            res-data (fetch-anilist-last-season-residue)
             mal-data (<! mal-data)
             ani-data (<! ani-data)
+            res-data (<! res-data)
             combined-xf (comp (filter #(= 2 (count %)))
                               (map (partial apply merge))
                               xf)]
         (cond
           (nil? mal-data) (println "could not fetch mal data for" mal-username)
-          (nil? ani-data) (println "could not currently running shows for" (get-year-and-season))
+          (nil? ani-data) (println "could not currently running shows for" (get-year-and-seasons))
+          (nil? res-data) (println "could not last seasons shows")
           (error? mal-data) mal-data
           (error? ani-data) ani-data
+          (error? res-data) res-data
           :else
-          (->> (concat mal-data ani-data)
+          (->> (concat mal-data ani-data res-data)
                (group-by :id)
                vals
                (transduce combined-xf f)

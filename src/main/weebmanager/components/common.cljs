@@ -65,7 +65,7 @@
   (let [profile-picture (r/atom {:url nil :component nil})]
     (fn [theme]
       (let [{username :username} @mal-settings
-            [year season] (a/get-year-and-season)
+            [year season] (a/get-year-and-seasons)
             season-text   (-> season str/lower-case str/capitalize (str " " year))
             username      (-> username str/lower-case str/capitalize)
             [bg-color text-color] (if (theme "dark")
