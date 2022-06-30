@@ -64,9 +64,12 @@
                      {"fields" "list_status,alternative_titles" "status" "watching" "limit" 500}))
 
 (def airing-eps-query
-  "query media($page: Int = 1, $type: MediaType, $season: MediaSeason,  $year: String, $sort: [MediaSort] = [POPULARITY_DESC, SCORE_DESC]) {
+  ;; TODO: fetch additional pages
+  ;;   this will only get the first 50 (that's the actual limit) shows, but the user might need the
+  ;;   rest too
+  "query seasonal ($page: Int = 1, $type: MediaType, $season: MediaSeason,  $year: Int, $sort: [MediaSort] = [POPULARITY_DESC, SCORE_DESC]) {
        Page(page: $page, perPage: 100) {
-           media(type: $type, season: $season, startDate_like: $year, sort: $sort) {
+           media(type: $type, season: $season, seasonYear: $year, sort: $sort) {
                id:idMal
                title {
                    english
