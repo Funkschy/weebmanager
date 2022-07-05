@@ -3,10 +3,8 @@
   (:require
    [cljs-http.client :as http]
    [cljs.core.async :refer [<!]]
-   [clojure.string :as str]
    [weebmanager.error :refer [Error error?]]
-   [weebmanager.config :refer [config]]
-   [weebmanager.settings :refer [request-settings]]))
+   [weebmanager.config :refer [config]]))
 
 (def client-id (get-in config [:mal :client-id]))
 
@@ -18,18 +16,21 @@
   Error
   (reason [_] reason))
 
-(defn get-url [url params headers]
-  (let [{:keys [request-timeout]} @request-settings]
-    (->> {:query-params params
-          :headers headers
-          :timeout (* request-timeout 1000)}
-         (http/get url)
-         <!
-         go)))
+(defn get-url [url & {:keys [params headers timeout-secs] :or {timeout-secs 3}}]
+  (->> {:query-params params
+        :headers headers
+        :timeout (* timeout-secs 1000)}
+       (http/get url)
+       <!
+       go))
 
-(defn fetch-mal-api [url params]
+(defn fetch-mal-api [url params timeout-secs]
   (go
-    (let [{:keys [status body error-code]} (<! (get-url url params {"X-MAL-CLIENT-ID" client-id}))]
+    (let [{:keys [status body error-code]}
+          (<! (get-url url
+                       :params params
+                       :headers {"X-MAL-CLIENT-ID" client-id}
+                       :timeout-secs timeout-secs))]
       (if-not (= 200 status)
         (do (println "Could not get myanimelist data" status error-code)
             (HttpError. status error-code))
@@ -37,12 +38,12 @@
 
 (defn fetch-mal-api-seq
   "Creates a lazy sequence of paging entries, which will only perform their request when consumed"
-  [start-url params]
+  [start-url params timeout-secs]
   (letfn
    [(inner [url]
       (go
         (when-not (nil? url)
-          (let [res (<! (fetch-mal-api url params))]
+          (let [res (<! (fetch-mal-api url params timeout-secs))]
             (if-not (error? res)
               (let [{data :data {next-url :next} :paging} res]
                 (apply conj
@@ -59,9 +60,12 @@
        (url-escape username)
        endpoint))
 
-(defn fetch-mal-watching [username]
+(defn fetch-mal-watching [username timeout-secs]
   (fetch-mal-api-seq (mal-url username "/animelist")
-                     {"fields" "list_status,alternative_titles" "status" "watching" "limit" 500}))
+                     {"fields" "list_status,alternative_titles"
+                      "status" "watching"
+                      "limit" 500}
+                     timeout-secs))
 
 (def last-season-residue-query
   "query seasonal($page: Int = 1, $type: MediaType, $lastSeason: MediaSeason, $year: Int, $sort: [MediaSort] = [POPULARITY_DESC, SCORE_DESC]) {
@@ -107,16 +111,15 @@
        }
    }")
 
-(defn- fetch-anilist [query variables]
+(defn- fetch-anilist [query variables timeout-secs]
   (let [params {"query" query
                 "variables" variables}]
     (go
-      (let [{:keys [request-timeout]} @request-settings
-            {:keys [status body error-code]}
+      (let [{:keys [status body error-code]}
             (<! (http/post "https://graphql.anilist.co"
                            {:headers {"Content-Type" "application/json"}
                             :body (. js/JSON stringify (clj->js params))
-                            :timeout (* request-timeout 1000)}))]
+                            :timeout (* timeout-secs 1000)}))]
         (if-not (= 200 status)
           (do (println "Could not get anilist data" status error-code)
               (HttpError. status error-code))
@@ -137,19 +140,21 @@
      last-season-year
      (get seasons last-season-int)]))
 
-(defn fetch-anilist-airing []
+(defn fetch-anilist-airing [timeout-secs]
   (let [[year season] (get-year-and-seasons)]
     (fetch-anilist airing-eps-query
                    {"season" season
                     "type"   "ANIME"
-                    "year"   year})))
+                    "year"   year}
+                   timeout-secs)))
 
-(defn fetch-anilist-last-season-residue []
+(defn fetch-anilist-last-season-residue [timeout-secs]
   (let [[_ _ last-season-year last-season] (get-year-and-seasons)]
     (fetch-anilist last-season-residue-query
                    {"lastSeason" last-season
                     "type"       "ANIME"
-                    "year"       last-season-year})))
+                    "year"       last-season-year}
+                   timeout-secs)))
 
 (defn current-episode [anime-info]
   (if (anime-info :nextAiringEpisode)
@@ -163,12 +168,12 @@
       (- current watched)
       0)))
 
-(defn transduce-merged-data [mal-username xf f map-result]
+(defn transduce-merged-data [mal-username timeout-secs xf f map-result]
   (go
     (if-not (empty? mal-username)
-      (let [mal-data (fetch-mal-watching mal-username)
-            ani-data (fetch-anilist-airing)
-            res-data (fetch-anilist-last-season-residue)
+      (let [mal-data (fetch-mal-watching mal-username timeout-secs)
+            ani-data (fetch-anilist-airing timeout-secs)
+            res-data (fetch-anilist-last-season-residue timeout-secs)
             mal-data (<! mal-data)
             ani-data (<! ani-data)
             res-data (<! res-data)
@@ -190,28 +195,30 @@
                map-result)))
       (UserError. "Please enter your MAL username in the settings"))))
 
-(defn fetch-merged-data [mal-username xf]
-  (transduce-merged-data mal-username xf conj identity))
+(defn fetch-merged-data [mal-username timeout-secs xf]
+  (transduce-merged-data mal-username timeout-secs xf conj identity))
 
-(defn fetch-behind-schedule [mal-username]
-  (prn "fetching backlog")
+(defn fetch-behind-schedule [mal-username timeout-secs]
+  (prn "fetching backlog for" mal-username)
   (let [xf (comp (map #(conj % [:behind (behind-schedule %)]))
                  (filter (comp not zero? :behind)))]
-    (fetch-merged-data mal-username xf)))
+    (fetch-merged-data mal-username timeout-secs xf)))
 
-(defn fetch-countdowns [mal-username]
-  (prn "fetching countdowns")
+(defn fetch-countdowns [mal-username timeout-secs]
+  (prn "fetching countdowns for" mal-username)
   (transduce-merged-data mal-username
+                         timeout-secs
                          (filter :nextAiringEpisode)
                          conj
                          (partial sort-by (comp :timeUntilAiring :nextAiringEpisode))))
-
-;; TODO: find a better solution for this
-(def app-icon "https://raw.githubusercontent.com/Funkschy/weebmanager/master/android/app/src/main/play_store_512.png")
 
 (defn fetch-user-profile-picture [mal-username]
   (prn "fetching user pfp from jikan")
   (go
     (let [url  (str "https://api.jikan.moe/v4/users/" (url-escape mal-username))
-          data (<! (get-url url {} {}))]
-      (get-in data [:body :data :images :jpg :image_url] app-icon))))
+          data (<! (get-url url {} {}))
+          img  (get-in data [:body :data :images :jpg :image_url])]
+      (if img
+        (println "using image:" img)
+        (println mal-username "has no pfp"))
+      img)))

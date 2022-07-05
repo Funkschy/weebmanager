@@ -1,166 +1,128 @@
 (ns weebmanager.components.common
-  (:require-macros [cljs.core.async.macros :refer [go]])
+  (:require-macros
+   [cljs.core.async.macros :refer [go]]
+   [weebmanager.macros :refer [react-$]])
   (:require
-   [cljs.core.async :refer [<!]]
-   ["@react-navigation/drawer" :as d]
-   [clojure.string :as str]
    ["react-native" :as rn]
    ["react-native-paper" :as p]
    ["react-native-vector-icons/MaterialIcons" :as m]
-   [reagent.core :as r]
-   [weebmanager.anime :as a]
-   [weebmanager.settings :refer [mal-settings]]
-   [weebmanager.state :refer [user-profile-picture]]))
+   [cljs.core.async :refer [<!]]
+   [uix.core :refer [$ defui use-effect use-state]]
+   [weebmanager.error :refer [error? reason]]
+   [weebmanager.preferences :refer [use-preferences]]))
 
 ;; sometimes imports from js/typescript libs are a bit weird
 (def MaterialIcon (. m -default))
 
-(defn appbar-icon [name]
-  [:> MaterialIcon
-   {:name name
-    :color "white"
-    :size 24}])
+(defui material-icon [{:keys [name icon-color size] :or {icon-color "white" size 24}}]
+  ($ MaterialIcon
+     {:name name
+      :color icon-color
+      :size size}))
 
-(defn appbar-action [icon-name on-press]
-  [:> (. p/Appbar -Action)
-   {:icon (fn [] (r/as-element [appbar-icon icon-name]))
-    :on-press on-press}])
+(defui avatar [{:keys [uri img]}]
+  ($ (. p/Avatar -Image)
+     {:source (or img #js {:uri uri})}))
 
-(defn avatar [uri]
-  (fn []
-    (r/as-element
-     [:> (. p/Avatar -Image) {:source {:uri uri}}])))
+(defui anime-list-item [{:keys [title description image]}]
+  ($ (. p/List -Item)
+     {:left (react-$ avatar {:uri image})
+      :title title
+      :description description}))
 
-(defn header-bar []
-  (fn [^js props]
-    (let [route-name  (-> props .-route .-name)]
-      (r/as-element
-       [:> (. p/Appbar -Header)
-        [appbar-action "menu" #(-> props .-navigation .openDrawer)]
-
-        [:> (. p/Appbar -Content)
-         {:title route-name}]
-
-        (when-not (= route-name "Settings")
-          [appbar-action "more-vert" #(-> props .-navigation (.navigate "Settings"))])]))))
-
-(defn- drawer-item [props name]
-  (let [^js navigation (. props -navigation)
-        ^js nav-state  (. navigation getState)
-        current-route  (aget (. nav-state -routes) (. nav-state -index))]
-    [:> (. p/Drawer -Item)
-     {:label name
-      :active (= (. current-route -name) name)
-      :on-press #(. navigation (navigate name))}]))
-
-(defn- set-profile-picture [iref username]
-  (go
-    (let [{current-url :url} @iref
-          profile-picture (<! (user-profile-picture username))]
-      (when (and profile-picture (not= profile-picture current-url))
-        (prn "setting pfp for" username "to" profile-picture)
-        (reset! iref {:url profile-picture :component (avatar profile-picture)})))))
-
-(defn- drawer-header []
-  (let [profile-picture (r/atom {:url nil :component nil})]
-    (fn [theme]
-      (let [{username :username} @mal-settings
-            [year season] (a/get-year-and-seasons)
-            season-text   (-> season str/lower-case str/capitalize (str " " year))
-            username      (-> username str/lower-case str/capitalize)
-            [bg-color text-color] (if (theme "dark")
-                                    ["surface" "onSurface"]
-                                    ["primary" "surface"])]
-        (go (set-profile-picture profile-picture username))
-        [:> rn/View
-         {:style {:background-color (get-in theme ["colors" bg-color])
-                  :height 100
-                  :justify-content "center"}}
-         [:> (. p/List -Section)
-          {:style {:background-color (get-in theme ["colors" bg-color])}}
-          [:> (. p/List -Item)
-           {:left (:component @profile-picture)
-            :title username
-            :description season-text
-            :description-style {:color (get-in theme ["colors" text-color])
-                                :padding-left 10}
-            :title-style {:color (get-in theme ["colors" text-color])
-                          :font-size 24
-                          :padding-left 10}}]]]))))
-
-(defn drawer-content [theme]
-  (fn [^js props]
-    (r/as-element
-     [:> d/DrawerContentScrollView
-      {:contentContainerStyle {:padding-top 0}}
-      [drawer-header theme]
-      [:> (. p/Drawer -Section)
-       {:title "Lists"}
-       [drawer-item props "Backlog"]
-       [drawer-item props "Countdown"]]])))
-
-(defn anime-icon [^js anime]
-  (avatar (-> anime .-item .-image)))
-
-(defn make-anime-list-entry [description-fn]
+(defn make-anime-list-item [description-fn]
   (fn [^js anime]
-    (r/as-element
-     [:> (. p/List -Item)
-      {:left (anime-icon anime)
-       :title (-> anime .-item .-name)
-       :description (description-fn anime)}])))
+    (let [{:keys [name image] :as anime} (js->clj (.-item anime) :keywordize-keys true)]
+      ($ anime-list-item
+         {:title name
+          :description (description-fn anime)
+          :image image}))))
 
-(defn list-empty-component [text icon-name color]
-  [:> rn/View
-   {:style {:justify-content :center
-            :align-items :center
-            :flex 1}}
-   [:> MaterialIcon
-    {:name icon-name
-     :color color
-     :size 40}]
-   [:> p/Text
-    {:style {:text-align :center}}
-    text]])
+(defui empty-list-component [{:keys [text icon-name icon-color]}]
+  ($ rn/View
+     {:style {:justify-content :center
+              :align-items :center
+              :flex 1}}
+     ($ material-icon
+        {:name icon-name
+         :icon-color icon-color
+         :size 40})
+     ($ p/Text
+        {:style {:text-align :center}}
+        text)))
 
-(defn- empty-list-view [text color]
-  [list-empty-component text "sentiment-dissatisfied" color])
+(defui anime-flat-list [{:keys [loading? refresh-data initial-data render-item empty-component]}]
+  ($ rn/FlatList
+     {:style {:margin 4
+              :margin-bottom 40
+              :flex 1}
+      :content-container-style #js {:flexGrow 1}
+      :refreshing loading?
+      :on-refresh refresh-data
+      :data (clj->js initial-data)
+      :render-item render-item
+      :ListEmptyComponent empty-component}))
 
-(defn- error-list-view [reason color]
-  [list-empty-component (str "Could not fetch animes:\n" reason) "sentiment-very-dissatisfied" color])
+(defui anime-list-view [{:keys [loading? animes refresh-animes render-item]}]
+  (let [theme (p/useTheme)
+        bg-color (-> theme .-colors .-background)
+        text-color (-> theme .-colors .-text)
 
-(defn- anime-flat-list [loading? refresh-data data make-list-item empty-component]
-  [:> rn/FlatList
-   {:style {:margin 4
-            :margin-bottom 40
-            :flex 1}
-    :content-container-style {:flex-grow 1}
-    :refreshing loading?
-    :on-refresh refresh-data
-    :data data
-    :render-item make-list-item
-    :ListEmptyComponent empty-component}])
+        [data reason] (if (error? animes) [[] (reason animes)] [animes nil])]
+    ($ rn/View
+       {:style {:flex 1
+                :background-color bg-color
+                :padding-top 0}}
+       ($ anime-flat-list
+          {:loading? loading?
+           :initial-data data
+           :refresh-data refresh-animes
+           :render-item render-item
+           :empty-component
+           (if (error? animes)
+             ($ empty-list-component
+                {:text (str "Could not fetch animes:\n" reason)
+                 :icon-name "sentiment-very-dissatisfied"
+                 :icon-color text-color})
+             ($ empty-list-component
+                {:text "No anime here"
+                 :icon-name "sentiment-dissatisfied"
+                 :icon-color text-color}))}))))
 
-(defn anime-list-screen
-  [make-anime-prop
-   make-list-item
-   refresh-data
-   & {:keys [animes loading? error]}]
-  (p/withTheme
-   (fn [^js props]
-     (let [bg-color   (-> props .-theme .-colors .-background)
-           text-color (-> props .-theme .-colors .-text)]
-       (r/as-element
-        [:> rn/View
-         {:style {:flex 1
-                  :background-color bg-color
-                  :padding-top 0}}
+(defui anime-list-screen [{:keys [make-anime-prop fetch-data description-fn]}]
+  (let [preferences (use-preferences)
 
-         [anime-flat-list loading?
-          refresh-data
-          (map make-anime-prop animes)
-          make-list-item
-          (r/as-element
-           (if-not error
-             [empty-list-view "No anime here" text-color]
-             [error-list-view error text-color]))]])))))
+        username        (get-in preferences [:mal :username])
+        title-language  (get-in preferences [:anime :title-language])
+        request-timeout (get-in preferences [:network :request-timeout])
+
+        make-prop  (partial make-anime-prop title-language)
+
+        [loading? set-loading!] (use-state false)
+        [backlog set-backlog!]  (use-state [])
+        [animes set-animes!]    (use-state [])
+
+        update-animes!  #(go (set-loading! true)
+                             (set-animes! (<! (fetch-data username request-timeout)))
+                             (set-loading! false))]
+
+    ;; recompute the props if either the data or the representation of that data changes
+    (use-effect (fn []
+                  (set-backlog!
+                   (if (error? animes)
+                     animes
+                     (map make-prop animes))))
+                [animes title-language])
+
+    ;; if the username changed we need to refetch the data...
+    (use-effect (fn []
+                  ;; ... however only if the last keystroke was > a second ago
+                  (let [delay-debounce (js/setTimeout update-animes! 1000)]
+                    (fn [] (js/clearTimeout delay-debounce))))
+                [username])
+
+    ($ anime-list-view
+       {:loading? loading?
+        :animes backlog
+        :refresh-animes update-animes!
+        :render-item (make-anime-list-item description-fn)})))

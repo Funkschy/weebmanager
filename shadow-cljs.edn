@@ -3,12 +3,13 @@
 
  :dependencies
  [[reagent "1.1.1"]
-  [cljs-http "0.1.46"]]
+  [cljs-http "0.1.46"]
+  [com.pitch/uix.core "0.3.0"]]
 
  :builds
  {:weebmanager
   {:target :react-native
    :init-fn weebmanager.core/init
-   :dev {:closure-defines {weebmanager.settings/default-username "funkschy"}}
+   :dev {:closure-defines {weebmanager.preferences/default-username "funkschy"}}
    :output-dir "app"
    :js-options {:js-package-dirs ["node_modules"]}}}}
