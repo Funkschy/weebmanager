@@ -62,9 +62,10 @@
 
 (defn fetch-mal-watching [username timeout-secs]
   (fetch-mal-api-seq (mal-url username "/animelist")
-                     {"fields" "list_status,alternative_titles"
+                     {"fields" "list_status"
+                      "nsfw"   "true"
                       "status" "watching"
-                      "limit" 500}
+                      "limit"  500}
                      timeout-secs))
 
 (def last-season-residue-query
