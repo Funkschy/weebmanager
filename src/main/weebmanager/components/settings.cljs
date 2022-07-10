@@ -56,8 +56,7 @@
 
         bg-color (-> theme .-colors .-background)]
     ($ rn/KeyboardAvoidingView
-       {:behavior :height
-        :keyboard-vertical-offset 100
+       {:behavior :position
         :style {:flex 1
                 :background-color bg-color
                 :padding-top 0}}
