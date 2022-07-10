@@ -54,9 +54,11 @@
 (defui anime-flat-list [{:keys [loading? refresh-data initial-data render-item empty-component]}]
   ($ rn/FlatList
      {:style {:margin 4
-              :margin-bottom 40
+              :margin-top 0
+              :margin-bottom 0
+              :padding-top 6
               :flex 1}
-      :content-container-style #js {:flexGrow 1}
+      :content-container-style #js {:flexGrow 1 :paddingBottom 12}
       :refreshing loading?
       :on-refresh refresh-data
       :data (clj->js initial-data)
@@ -72,7 +74,7 @@
     ($ rn/View
        {:style {:flex 1
                 :background-color bg-color
-                :padding-top 0}}
+                :padding 0}}
        ($ anime-flat-list
           {:loading? loading?
            :initial-data data
