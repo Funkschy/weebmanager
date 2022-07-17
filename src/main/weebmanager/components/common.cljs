@@ -24,8 +24,57 @@
   ($ (. p/Avatar -Image)
      {:source (or img #js {:uri uri})}))
 
-(defui anime-list-item [{:keys [title description image]}]
+(defui switch [{:keys [active? on-press]}]
+  ($ p/Switch
+     {:value active?
+      :on-value-change on-press}))
+
+(defui checkbox [{:keys [checked? on-press]}]
+  ($ p/Checkbox
+     {:status (if checked? "checked" "unchecked")
+      :on-press on-press}))
+
+(defui list-item [{:keys [left title description right]}]
   ($ (. p/List -Item)
+     {:title title
+      :left left
+      :description description
+      :right right}))
+
+(defui radio-button [{:keys [value pressed? on-press]}]
+  ($ p/RadioButton
+     {:value value
+      :status (if pressed? "checked" "unchecked")
+      :on-press on-press}))
+
+(defui radio-list-item [{:keys [title pressed? on-press]}]
+  ($ list-item
+     {:title title
+      :right
+      (react-$ radio-button
+               {:value title
+                :pressed? pressed?
+                :on-press on-press})}))
+
+(defui text-input [{:keys [label placeholder default-value on-change-text keyboard-type affix-text]}]
+  ($ rn/View
+     {:style {:align-items :stretch
+              :margin 15}}
+     ($ p/TextInput
+        {:label label
+         :placeholder placeholder
+         :default-value default-value
+         :on-change-text on-change-text
+         :keyboard-type keyboard-type
+         :right (when affix-text ($ (. p/TextInput -Affix) {:text affix-text}))})))
+
+(defui accordion [{:keys [title children]}]
+  ($ (. p/List -Accordion)
+     {:title title}
+     children))
+
+(defui anime-list-item [{:keys [title description image]}]
+  ($ list-item
      {:left (react-$ avatar {:uri image})
       :title title
       :description description}))
@@ -91,7 +140,7 @@
                  :icon-name "sentiment-dissatisfied"
                  :icon-color text-color}))}))))
 
-(defui anime-list-screen [{:keys [make-anime-prop fetch-data description-fn]}]
+(defui anime-list-screen [{:keys [make-anime-prop fetch-data description-fn shows]}]
   (let [preferences (use-preferences)
 
         username        (get-in preferences [:mal :username])
@@ -101,16 +150,24 @@
         make-prop  (partial make-anime-prop title-language)
 
         [loading? set-loading!] (use-state false)
-        [backlog set-backlog!]  (use-state [])
         [animes set-animes!]    (use-state [])
+
+        [displayed-shows set-displayed-shows!] (use-state [])
 
         update-animes!  #(go (set-loading! true)
                              (set-animes! (<! (fetch-data username request-timeout)))
                              (set-loading! false))]
 
+    ;; allow for overloading of the actual data
+    ;; this is needed for the recommendation page, which updates its entries without refetching
+    ;; them via the fetch-data function
+    (use-effect (fn []
+                  (set-animes! shows))
+                [shows])
+
     ;; recompute the props if either the data or the representation of that data changes
     (use-effect (fn []
-                  (set-backlog!
+                  (set-displayed-shows!
                    (if (error? animes)
                      animes
                      (map make-prop animes))))
@@ -125,6 +182,6 @@
 
     ($ anime-list-view
        {:loading? loading?
-        :animes backlog
+        :animes displayed-shows
         :refresh-animes update-animes!
         :render-item (make-anime-list-item description-fn)})))

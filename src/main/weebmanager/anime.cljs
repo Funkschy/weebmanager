@@ -4,7 +4,8 @@
    [cljs-http.client :as http]
    [cljs.core.async :refer [<!]]
    [weebmanager.error :refer [Error error?]]
-   [weebmanager.config :refer [config]]))
+   [weebmanager.config :refer [config]]
+   [clojure.string :as str]))
 
 (def client-id (get-in config [:mal :client-id]))
 
@@ -36,21 +37,17 @@
             (HttpError. status error-code))
         body))))
 
-(defn fetch-mal-api-seq
-  "Creates a lazy sequence of paging entries, which will only perform their request when consumed"
-  [start-url params timeout-secs]
-  (letfn
-   [(inner [url]
-      (go
-        (when-not (nil? url)
-          (let [res (<! (fetch-mal-api url params timeout-secs))]
-            (if-not (error? res)
-              (let [{data :data {next-url :next} :paging} res]
-                (apply conj
-                       (<! (inner next-url))
-                       (reverse (map #(apply conj (vals %)) data))))
-              res)))))]
-    (inner start-url)))
+(defn fetch-mal-api-seq [start-url params timeout-secs]
+  (go
+    (loop [url start-url, anime []]
+      (if url
+        (let [res (<! (fetch-mal-api url params timeout-secs))]
+
+          (if-not (error? res)
+            (let [{data :data {next-url :next} :paging} res]
+              (recur next-url (apply conj anime (map #(apply merge (vals %)) data))))
+            res))
+        anime))))
 
 (defn url-escape [s]
   (js/encodeURIComponent s))
@@ -68,8 +65,8 @@
                       "limit"  500}
                      timeout-secs))
 
-(def last-season-residue-query
-  "query seasonal($page: Int = 1, $type: MediaType, $lastSeason: MediaSeason, $year: Int, $sort: [MediaSort] = [POPULARITY_DESC, SCORE_DESC]) {
+(defn last-season-residue-query [page]
+  (str "query seasonal($page: Int = " page ", $type: MediaType, $lastSeason: MediaSeason, $year: Int, $sort: [MediaSort] = [POPULARITY_DESC, SCORE_DESC]) {
      Page(page: $page, perPage: 100) {
        media(type: $type, season: $lastSeason, seasonYear: $year, sort: $sort, episodes_greater: 12, status: RELEASING) {
          id: idMal
@@ -81,19 +78,15 @@
          }
          episodes
          nextAiringEpisode {
-           airingAt
            timeUntilAiring
            episode
          }
        }
      }
-   }")
+   }"))
 
-(def airing-eps-query
-  ;; TODO: fetch additional pages
-  ;;   this will only get the first 50 (that's the actual limit) shows, but the user might need the
-  ;;   rest too
-  "query seasonal ($page: Int = 1, $type: MediaType, $season: MediaSeason,  $year: Int, $sort: [MediaSort] = [POPULARITY_DESC, SCORE_DESC]) {
+(defn airing-eps-query [page]
+  (str "query seasonal ($page: Int = " page ", $type: MediaType, $season: MediaSeason,  $year: Int, $sort: [MediaSort] = [POPULARITY_DESC, SCORE_DESC]) {
        Page(page: $page, perPage: 100) {
            media(type: $type, season: $season, seasonYear: $year, sort: $sort) {
                id:idMal
@@ -104,13 +97,29 @@
                }
                episodes
                nextAiringEpisode {
-                   airingAt
                    timeUntilAiring
                    episode
                }
            }
        }
-   }")
+   }"))
+
+(defn all-mal-animes-eps-query [mal-ids page]
+  (str "query seasonal ($page: Int = " page ", $type: MediaType, $sort: [MediaSort] = [POPULARITY_DESC, SCORE_DESC]) {
+        Page(page: $page, perPage: 100) {
+            pageInfo {
+                hasNextPage
+            }
+            media(type: $type, sort: $sort, idMal_in: [" (str/join "," mal-ids) "]) {
+                id:idMal
+                title {
+                    english
+                    romaji
+                    native
+                }
+            }
+        }
+   }"))
 
 (defn- fetch-anilist [query variables timeout-secs]
   (let [params {"query" query
@@ -124,7 +133,19 @@
         (if-not (= 200 status)
           (do (println "Could not get anilist data" status error-code)
               (HttpError. status error-code))
-          (get-in body [:data :Page :media]))))))
+          ((juxt :media :pageInfo) (get-in body [:data :Page])))))))
+
+(defn fetch-anilist-seq [query-fn params timeout-secs]
+  (go
+    (loop [page 1, data []]
+      (let [res (<! (fetch-anilist (query-fn page) params timeout-secs))]
+        (if-not (error? res)
+          (let [[media page-info] res
+                new-data (apply conj data media)]
+            (if (:hasNextPage page-info)
+              (recur (long (inc page)) new-data)
+              new-data))
+          res)))))
 
 (def seasons ["WINTER" "SPRING" "SUMMER" "FALL"])
 (defn get-year-and-seasons []
@@ -143,19 +164,19 @@
 
 (defn fetch-anilist-airing [timeout-secs]
   (let [[year season] (get-year-and-seasons)]
-    (fetch-anilist airing-eps-query
-                   {"season" season
-                    "type"   "ANIME"
-                    "year"   year}
-                   timeout-secs)))
+    (fetch-anilist-seq airing-eps-query
+                       {"season" season
+                        "type"   "ANIME"
+                        "year"   year}
+                       timeout-secs)))
 
 (defn fetch-anilist-last-season-residue [timeout-secs]
   (let [[_ _ last-season-year last-season] (get-year-and-seasons)]
-    (fetch-anilist last-season-residue-query
-                   {"lastSeason" last-season
-                    "type"       "ANIME"
-                    "year"       last-season-year}
-                   timeout-secs)))
+    (fetch-anilist-seq last-season-residue-query
+                       {"lastSeason" last-season
+                        "type"       "ANIME"
+                        "year"       last-season-year}
+                       timeout-secs)))
 
 (defn current-episode [anime-info]
   (if (anime-info :nextAiringEpisode)
@@ -169,7 +190,17 @@
       (- current watched)
       0)))
 
-(defn transduce-merged-data [mal-username timeout-secs xf f map-result]
+(defn merge-and-transduce-data [xf f map-result & data-sets]
+  (let [combined-xf (comp (filter #(>= (count %) 2))
+                          (map (partial apply merge))
+                          xf)]
+    (->> (apply concat data-sets)
+         (group-by :id)
+         vals
+         (transduce combined-xf f)
+         map-result)))
+
+(defn fetch-and-transduce-watching [mal-username timeout-secs xf f map-result]
   (go
     (if-not (empty? mal-username)
       (let [mal-data (fetch-mal-watching mal-username timeout-secs)
@@ -177,10 +208,7 @@
             res-data (fetch-anilist-last-season-residue timeout-secs)
             mal-data (<! mal-data)
             ani-data (<! ani-data)
-            res-data (<! res-data)
-            combined-xf (comp (filter #(= 2 (count %)))
-                              (map (partial apply merge))
-                              xf)]
+            res-data (<! res-data)]
         (cond
           (nil? mal-data) (println "could not fetch mal data for" mal-username)
           (nil? ani-data) (println "could not currently running shows for" (get-year-and-seasons))
@@ -188,16 +216,11 @@
           (error? mal-data) mal-data
           (error? ani-data) ani-data
           (error? res-data) res-data
-          :else
-          (->> (concat mal-data ani-data res-data)
-               (group-by :id)
-               vals
-               (transduce combined-xf f)
-               map-result)))
+          :else (merge-and-transduce-data xf f map-result mal-data ani-data res-data)))
       (UserError. "Please enter your MAL username in the settings"))))
 
 (defn fetch-merged-data [mal-username timeout-secs xf]
-  (transduce-merged-data mal-username timeout-secs xf conj identity))
+  (fetch-and-transduce-watching mal-username timeout-secs xf conj identity))
 
 (defn fetch-behind-schedule [mal-username timeout-secs]
   (prn "fetching backlog for" mal-username)
@@ -207,11 +230,11 @@
 
 (defn fetch-countdowns [mal-username timeout-secs]
   (prn "fetching countdowns for" mal-username)
-  (transduce-merged-data mal-username
-                         timeout-secs
-                         (filter :nextAiringEpisode)
-                         conj
-                         (partial sort-by (comp :timeUntilAiring :nextAiringEpisode))))
+  (fetch-and-transduce-watching mal-username
+                                timeout-secs
+                                (filter :nextAiringEpisode)
+                                conj
+                                (partial sort-by (comp :timeUntilAiring :nextAiringEpisode))))
 
 (defn fetch-user-profile-picture [mal-username]
   (prn "fetching user pfp from jikan")
@@ -223,3 +246,37 @@
         (println "using image:" img)
         (println mal-username "has no pfp"))
       img)))
+
+(defn fetch-mal-completed [username timeout-secs]
+  (fetch-mal-api-seq (mal-url username "/animelist")
+                     {"fields" "list_status,genres"
+                      "nsfw"   "true"
+                      "status" "completed"
+                      "limit"  500}
+                     timeout-secs))
+
+(def with-genres-reduction-fn
+  (completing
+   (fn
+     ([] [[] #{}])
+     ([acc show]
+      (-> acc
+          (update 0 conj show)
+          (update 1 (partial apply conj) (get show :genres [])))))))
+
+(defn fetch-completed-with-genres [mal-username timeout-secs]
+  (prn "fetching completed shows for" mal-username)
+  (go
+    (let [mal-res (<! (fetch-mal-completed mal-username timeout-secs))]
+      (if-not (error? mal-res)
+        (let [ids      (map :id mal-res)
+              query-fn (partial all-mal-animes-eps-query ids)
+              params   {"type" "ANIME"}
+              ani-res  (<! (fetch-anilist-seq query-fn params timeout-secs))]
+          (if-not (error? ani-res)
+            (merge-and-transduce-data (map identity)
+                                      with-genres-reduction-fn
+                                      identity
+                                      mal-res ani-res)
+            ani-res))
+        mal-res))))

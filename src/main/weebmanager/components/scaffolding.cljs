@@ -86,4 +86,5 @@
        ($ drawer-header)
        ($ (. p/Drawer -Section) {:title "Lists"}
           (make-item "Backlog")
-          (make-item "Countdown")))))
+          (make-item "Countdown")
+          (make-item "Recommend")))))

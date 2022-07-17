@@ -11,6 +11,7 @@
    [uix.core :refer [$ defui use-effect use-state]]
    [weebmanager.components.backlog :refer [backlog-screen]]
    [weebmanager.components.countdown :refer [countdown-screen]]
+   [weebmanager.components.recommend :refer [recommend-screen]]
    [weebmanager.components.scaffolding :refer [appbar drawer-content]]
    [weebmanager.components.settings :refer [settings-screen]]
    [weebmanager.preferences :refer [default-prefs load-all-prefs
@@ -22,6 +23,7 @@
 
 (def backlog-component (react-$ backlog-screen))
 (def countdown-component (react-$ countdown-screen))
+(def recommend-component (react-$ recommend-screen))
 (def settings-component (react-$ settings-screen))
 
 (defui navigation-container [{:keys [drawer]}]
@@ -39,6 +41,9 @@
         ($ (. drawer -Screen)
            {:name "Countdown"
             :component countdown-component})
+        ($ (. drawer -Screen)
+           {:name "Recommend"
+            :component recommend-component})
         ($ (. drawer -Screen)
            {:name "Settings"
             :component settings-component}))))

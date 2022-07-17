@@ -5,45 +5,15 @@
    ["react-native" :as rn]
    ["react-native-paper" :as p]
    [uix.core :refer [$ defui]]
+   [weebmanager.components.common :refer [accordion list-item radio-list-item
+                                          switch text-input]]
    [weebmanager.preferences :refer [use-preferences]]))
 
 (defui settings-entry [{:keys [component title description]}]
-  ($ (. p/List -Item)
+  ($ list-item
      {:title title
       :description description
       :right component}))
-
-(defui switch [{:keys [active? on-press]}]
-  ($ p/Switch
-     {:value active?
-      :on-value-change on-press}))
-
-(defui text-input [{:keys [label placeholder default-value on-change-text keyboard-type affix-text]}]
-  ($ rn/View
-     {:style {:align-items :stretch
-              :margin 15}}
-     ($ p/TextInput
-        {:label label
-         :placeholder placeholder
-         :default-value default-value
-         :on-change-text on-change-text
-         :keyboard-type keyboard-type
-         :right (when affix-text ($ (. p/TextInput -Affix) {:text affix-text}))})))
-
-(defui accordion [{:keys [title children]}]
-  ($ (. p/List -Accordion)
-     {:title title}
-     children))
-
-(defui radio-list-item [{:keys [title pressed? on-press]}]
-  (let [status (if pressed? "checked" "unchecked")]
-    ($ (. p/List -Item)
-       {:title title
-        :right
-        (react-$ p/RadioButton
-                 {:value title
-                  :status status
-                  :on-press on-press})})))
 
 (defui settings-screen [_]
   (let [theme (p/useTheme)
