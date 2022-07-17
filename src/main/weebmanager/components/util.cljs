@@ -33,3 +33,13 @@
     (if (empty? formatted)
       "less than one hour"
       formatted)))
+
+(defn extract-additional-info [anime key-name-map]
+  (reduce (fn [m [k v]]
+            (let [[new-name map-value] (key-name-map k)
+                  new-value (map-value v)]
+              (if new-value
+                (assoc m new-name new-value)
+                m)))
+          {}
+          (select-keys anime (keys key-name-map))))

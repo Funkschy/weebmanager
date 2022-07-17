@@ -12,15 +12,22 @@
    [weebmanager.anime :as a]
    [weebmanager.components.common :refer [accordion anime-list-screen checkbox
                                           list-item]]
-   [weebmanager.components.util :refer [get-title]]
+   [weebmanager.components.util :refer [extract-additional-info get-title]]
    [weebmanager.error :refer [error?]]))
 
-(defn recommend-make-anime-prop [title-language {:keys [title main_picture genres]}]
+(defn recommend-make-anime-prop
+  [title-language {:keys [id ani_id title main_picture genres] :as a}]
   (let [title (get-title title title-language)]
-    {:id title
+    {:id id
+     :ani-id ani_id
      :name title
      :image (get main_picture :medium "")
-     :genres (map :name genres)}))
+     :genres (map :name genres)
+     :additional-info (extract-additional-info
+                       a
+                       {:score ["Rating" #(when-not (zero? %) (str % "/10"))]
+                        :num_episodes_watched ["Episodes watched" str]
+                        :is_rewatching ["Rewatching" {true "yes"}]})}))
 
 (defn recommend-description-fn [{:keys [genres]}]
   (str/join ", " genres))

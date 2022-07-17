@@ -70,6 +70,7 @@
      Page(page: $page, perPage: 100) {
        media(type: $type, season: $lastSeason, seasonYear: $year, sort: $sort, episodes_greater: 12, status: RELEASING) {
          id: idMal
+         ani_id: id
          status
          title {
            english
@@ -90,6 +91,7 @@
        Page(page: $page, perPage: 100) {
            media(type: $type, season: $season, seasonYear: $year, sort: $sort) {
                id:idMal
+               ani_id: id
                title {
                    english
                    romaji
@@ -112,6 +114,7 @@
             }
             media(type: $type, sort: $sort, idMal_in: [" (str/join "," mal-ids) "]) {
                 id:idMal
+                ani_id: id
                 title {
                     english
                     romaji

@@ -34,11 +34,12 @@
      {:status (if checked? "checked" "unchecked")
       :on-press on-press}))
 
-(defui list-item [{:keys [left title description right]}]
+(defui list-item [{:keys [left title description right on-press]}]
   ($ (. p/List -Item)
      {:title title
       :left left
       :description description
+      :on-press on-press
       :right right}))
 
 (defui radio-button [{:keys [value pressed? on-press]}]
@@ -73,18 +74,62 @@
      {:title title}
      children))
 
-(defui anime-list-item [{:keys [title description image]}]
-  ($ list-item
-     {:left (react-$ avatar {:uri image})
-      :title title
-      :description description}))
+(def mal-logo (js/require "../assets/mal-logo.png"))
+(def ani-logo (js/require "../assets/ani-logo.png"))
+
+(defui icon-link [{:keys [image url radius] :or {radius 30}}]
+  ($ rn/TouchableOpacity
+     {:on-press #(. rn/Linking openURL url)
+      :style {:width radius
+              :height radius
+              :flex 0
+              :margin-right (/ radius 3)}}
+     ($ (. p/Avatar -Image)
+        {:source image
+         :size radius})))
+
+(defui extended-description-view [{:keys [links extend-info]}]
+  ($ rn/View
+     {:margin-left 4}
+     ($ rn/View
+        {:flex 1
+         :flex-direction :row}
+        ($ rn/View
+           {:flex 1}
+           (for [k (keys extend-info)]
+             ($ p/Text {:key k} (name k))))
+        ($ rn/View
+           {:flex 1}
+           (for [v (vals extend-info)]
+             ($ p/Text {:key v} (str v)))))
+     ($ rn/View
+        {:flex 1
+         :margin-top 8
+         :align-items :center
+         :flex-direction :row}
+        (for [{:keys [url image]} links]
+          ($ icon-link {:key url :url url :image image})))))
+
+(defui anime-list-item [{:keys [title links description image extend-info]}]
+  (let [[extended? set-extended!] (use-state false)
+        description (if extended?
+                      (react-$ extended-description-view {:links links :extend-info extend-info})
+                      description)]
+    ($ list-item
+       {:left (react-$ avatar {:uri image})
+        :title title
+        :on-press #(set-extended! not)
+        :description description})))
 
 (defn make-anime-list-item [description-fn]
   (fn [^js anime]
-    (let [{:keys [name image] :as anime} (js->clj (.-item anime) :keywordize-keys true)]
+    (let [{:keys [id ani-id name image additional-info] :as anime} (js->clj (.-item anime) :keywordize-keys true)]
       ($ anime-list-item
          {:title name
           :description (description-fn anime)
+          :extend-info additional-info
+          :links [{:image mal-logo :url (str "https://myanimelist.net/anime/" id)}
+                  {:image ani-logo :url (str "https://anilist.co/anime/" ani-id)}]
           :image image}))))
 
 (defui empty-list-component [{:keys [text icon-name icon-color]}]
