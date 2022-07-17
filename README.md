@@ -15,9 +15,13 @@ in the top right and enter your name in the username text field. To refresh the 
 This app will only show you the shows that are set to "Currently Watching" in your MAL account and are airing in the current season.
 As soon as the season changes, it will only display the shows from the new season.
 
+Furthermore you can now filter your completed shows based on a combination of genres.
+
 ## Screenshots
 
 ![Drawer](drawer-dark-scaled.png)
 ![Seasonal Backlog](backlog-light-scaled.png)
 ![Countdown until next episodes](countdown-dark-scaled.png)
 ![settings screen](settings-amoled-scaled.png)
+![Recommendation Genre Selection](recommend-genres-dark.png)
+![Recommendation View](recommend-dark.png)
