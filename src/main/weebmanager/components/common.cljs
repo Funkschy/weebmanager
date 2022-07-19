@@ -34,13 +34,7 @@
      {:status (if checked? "checked" "unchecked")
       :on-press on-press}))
 
-(defui list-item [{:keys [left title description right on-press]}]
-  ($ (. p/List -Item)
-     {:title title
-      :left left
-      :description description
-      :on-press on-press
-      :right right}))
+(def list-item (. p/List -Item))
 
 (defui radio-button [{:keys [value pressed? on-press]}]
   ($ p/RadioButton
@@ -118,6 +112,7 @@
     ($ list-item
        {:left (react-$ avatar {:uri image})
         :title title
+        :title-number-of-lines (if extended? 4 1)
         :on-press #(set-extended! not)
         :description description})))
 
